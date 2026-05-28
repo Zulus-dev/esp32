@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        #editor { width: 100%; height: 65vh; background: #111; color: var(--accent); border: 1px solid #333; padding: 10px; font-family: monospace; font-size: 14px; border-radius: 4px; resize: vertical; box-sizing: border-box; }
+        .edit-controls { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        input[type="text"] { flex-grow: 1; background: #222; border: 1px solid #444; color: white; padding: 8px; border-radius: 4px; }
+        #status { min-height: 20px; font-size: 12px; opacity: 0.8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-header">
+            <a href="/explorer.html" class="back-link">← Проводник</a>
+            <span style="color:var(--accent); font-weight:bold;">COLIBRY EDITOR</span>
+        </div>
+
+        <div class="edit-controls">
+            <input type="text" id="filePath" placeholder="/folder/file.py">
+            <button onclick="saveFile()" class="btn-primary">СОХРАНИТЬ</button>
+        </div>
+        <div id="status"></div>
+        <textarea id="editor" spellcheck="false" placeholder="Начните писать код..."></textarea>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const editor = document.getElementById('editor');
+        const pathInput = document.getElementById('filePath');
+        const statusLine = document.getElementById('status');
+
+        function enc(path) { return encodeURIComponent(path); }
+        function setStatus(text) { statusLine.textContent = text || ''; }
+
+        async function load() {
+            const path = params.get('path') || '';
+            pathInput.value = path;
+            if (!path) return;
+            setStatus('Загрузка ' + path + ' ...');
+            const res = await fetch(`/api/read?path=${enc(path)}`);
+            if (res.ok) {
+                editor.value = await res.text();
+                setStatus('Открыт: ' + path);
+            } else {
+                setStatus('Новый файл: ' + path);
+            }
+        }
+
+        async function saveFile() {
+            const path = pathInput.value.trim();
+            if (!path || path === '/') { alert('Укажите путь к файлу!'); return; }
+            setStatus('Сохранение...');
+            const res = await fetch(`/api/save?path=${enc(path)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+                body: editor.value
+            });
+            if (res.ok) {
+                setStatus('Сохранено: ' + path + ' (' + editor.value.length + ' байт)');
+            } else {
+                const text = await res.text();
+                setStatus('Ошибка сохранения: ' + text);
+                alert('Ошибка сохранения!');
+            }
+        }
+
+        window.onload = load;
+    </script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+# hardware/radio_service.py - async Node B supervisor for menu and web API
+import asyncio
+import gc
+import time
+
+from machine import Pin
+
+from config import Config
+from hardware.radio_uart import RadioUART
+
+
+TLV_KEEPALIVE = 0xFF
+TLV_SUBGHZ_PACKET = 0x10
+TLV_NRF_HID_EVENT = 0x11
+TLV_WIFI_FRAME = 0x12
+TLV_BLE_ADV = 0x13
+TLV_RSSI_REPORT = 0x20
+TLV_STATUS = 0x21
+TLV_LOG = 0xF0
+
+CMD_SET_FREQ = 0x01
+CMD_START_SUBGHZ_SCAN = 0x02
+CMD_REPLAY_SUBGHZ = 0x03
+CMD_STOP_ALL = 0x08
+CMD_SET_MODULATION = 0x09
+CMD_START_SCAN = 0x0A
+CMD_START_SNIFF = 0x0B
+CMD_REPLAY = 0x0C
+CMD_RAW_TX = 0x0D
+CMD_SET_POWER = 0x0E
+CMD_SPECTRUM_SWEEP = 0x0F
+
+_EVENT_NAMES = {
+    TLV_KEEPALIVE: "keepalive",
+    TLV_SUBGHZ_PACKET: "subghz",
+    TLV_NRF_HID_EVENT: "nrf_hid",
+    TLV_WIFI_FRAME: "wifi",
+    TLV_BLE_ADV: "ble_adv",
+    TLV_RSSI_REPORT: "rssi",
+    TLV_STATUS: "status",
+    TLV_LOG: "log",
+}
+
+
+class RadioService:
+    """Non-blocking UART bridge to Node B.
+
+    The service keeps only a small ring of decoded telemetry for OLED/web views;
+    raw payloads remain binary on the UART and are converted to compact hex/text
+    only at the UI boundary.
+    """
+
+    def __init__(self, core, max_events=24):
+        self.core = core
+        self.max_events = max_events
+        self.powered = False
+        self.online = False
+        self.last_seen_ms = 0
+        self.last_status = "OFF"
+        self.events = []
+        self.uart = None
+        self._task = None
+        self._power = None
+        self._restart_task = None
+        self.packets = []
+        self.rssi = []
+
+    async def start(self):
+        if self.powered:
+            return
+        self._power = Pin(Config.RADIO_POWER_PIN, Pin.OUT, value=1)
+        self.powered = True
+        self.last_status = "BOOTING"
+        self.core.update_status(radio=True)
+        await asyncio.sleep_ms(Config.RADIO_BOOT_WAIT_MS)
+        self.uart = RadioUART()
+        self._task = asyncio.create_task(self._listen_loop())
+        self._add_event(TLV_STATUS, b"NODE_B_POWER_ON")
+
+    def command(self, msg_type, payload=b""):
+        if not self.uart:
+            raise ValueError("radio_uart_not_ready")
+        self.uart.send_tlv(msg_type, payload)
+        self.last_status = "CMD 0x%02X" % msg_type
+
+    async def shutdown(self):
+        if self.uart:
+            try:
+                self.command(0xFF)
+            except Exception:
+                pass
+            await asyncio.sleep_ms(Config.RADIO_SHUTDOWN_WAIT_MS)
+        await self.stop(hard_power=True)
+
+    async def stop(self, hard_power=False):
+        if self.uart:
+            try:
+                self.uart.send_tlv(0x08)
+            except Exception:
+                pass
+        if self._task:
+            self._task.cancel()
+            self._task = None
+        if self.uart:
+            self.uart.close()
+            self.uart = None
+        if hard_power and self._power:
+            self._power.value(0)
+        self.powered = False if hard_power else self.powered
+        self.online = False
+        self.last_status = "OFF" if hard_power else "STOPPED"
+        self.core.update_status(radio=False if hard_power else self.powered)
+        gc.collect()
+
+    async def _listen_loop(self):
+        while True:
+            item = self.uart.read_tlv() if self.uart else None
+            if item is not None:
+                msg_type, payload = item
+                self._add_event(msg_type, payload)
+                if msg_type == TLV_KEEPALIVE:
+                    self.online = True
+                    self.last_seen_ms = _ticks_ms()
+                elif msg_type in (TLV_STATUS, TLV_LOG):
+                    self.last_status = _payload_text(payload)
+            if self.online and self.last_seen_ms and _ticks_diff(_ticks_ms(), self.last_seen_ms) > 1800:
+                self.online = False
+                self.last_status = "LINK_LOST"
+            if self.powered and self.last_seen_ms and _ticks_diff(_ticks_ms(), self.last_seen_ms) > 3000:
+                self.last_status = "NODE_B_RESTARTING"
+                await self._restart_node_b()
+            await asyncio.sleep_ms(2)
+
+    def _add_event(self, msg_type, payload):
+        decoded = _decode_radio_payload(msg_type, payload)
+        item = {
+            "t": _ticks_ms(),
+            "type": msg_type,
+            "name": _EVENT_NAMES.get(msg_type, "0x%02X" % msg_type),
+            "text": decoded.get("text", _payload_text(payload)),
+            "hex": _payload_hex(payload, 64),
+        }
+        item.update(decoded)
+        if msg_type == TLV_SUBGHZ_PACKET:
+            self.packets.append(item)
+            if len(self.packets) > 20:
+                self.packets.pop(0)
+        elif msg_type == TLV_RSSI_REPORT:
+            self.rssi.append(item)
+            if len(self.rssi) > 48:
+                self.rssi.pop(0)
+        self.events.append(item)
+        if len(self.events) > self.max_events:
+            self.events.pop(0)
+
+    async def _restart_node_b(self):
+        if self._restart_task is not None:
+            return
+        self._restart_task = True
+        try:
+            if self.uart:
+                self.uart.close()
+                self.uart = None
+            if self._power:
+                self._power.value(0)
+                await asyncio.sleep_ms(250)
+                self._power.value(1)
+            await asyncio.sleep_ms(Config.RADIO_BOOT_WAIT_MS)
+            self.uart = RadioUART()
+            self.last_seen_ms = _ticks_ms()
+            self._add_event(TLV_STATUS, b"NODE_B_AUTO_RESTART")
+        finally:
+            self._restart_task = None
+
+    def snapshot(self):
+        return {
+            "ok": True,
+            "powered": self.powered,
+            "online": self.online,
+            "last_status": self.last_status,
+            "last_seen_ms": self.last_seen_ms,
+            "events": self.events,
+            "packets": self.packets,
+            "rssi": self.rssi,
+        }
+
+
+def _ticks_ms():
+    try:
+        return time.ticks_ms()
+    except AttributeError:
+        return int(time.time() * 1000)
+
+
+def _ticks_diff(a, b):
+    try:
+        return time.ticks_diff(a, b)
+    except AttributeError:
+        return a - b
+
+
+def _payload_text(payload):
+    try:
+        return payload.decode()[:64]
+    except Exception:
+        return _payload_hex(payload, 32)
+
+
+def _payload_hex(payload, limit):
+    return "".join("%02X" % b for b in payload[:limit])
+
+
+def _decode_radio_payload(msg_type, payload):
+    if msg_type == TLV_SUBGHZ_PACKET and len(payload) >= 11:
+        khz = _u32(payload, 0)
+        rssi = _i8(payload[4])
+        ln = min(payload[5], max(0, len(payload) - 11))
+        ts = _u32(payload, 6)
+        mod = payload[10]
+        data = payload[11:11 + ln]
+        return {
+            "freq": khz / 1000,
+            "rssi_dbm": rssi,
+            "len": ln,
+            "timestamp": ts,
+            "modulation": _mod_name(mod),
+            "data_hex": _payload_hex(data, 64),
+            "ascii": _ascii(data),
+            "text": "%.3fMHz %sdBm %s %dB" % (khz / 1000, rssi, _mod_name(mod), ln),
+        }
+    if msg_type == TLV_RSSI_REPORT and len(payload) >= 9:
+        khz = _u32(payload, 0)
+        rssi = _i8(payload[4])
+        return {"freq": khz / 1000, "rssi_dbm": rssi, "timestamp": _u32(payload, 5),
+                "text": "%.3fMHz %sdBm" % (khz / 1000, rssi)}
+    return {}
+
+
+def _u32(buf, pos):
+    return (buf[pos] << 24) | (buf[pos + 1] << 16) | (buf[pos + 2] << 8) | buf[pos + 3]
+
+
+def _i8(value):
+    return value - 256 if value & 0x80 else value
+
+
+def _mod_name(value):
+    return ("2-FSK", "GFSK", "ASK/OOK", "ASK/OOK", "4-FSK")[value] if value < 5 else "MOD%d" % value
+
+
+def _ascii(data):
+    out = []
+    for b in data[:32]:
+        out.append(chr(b) if 32 <= b <= 126 else ".")
+    return "".join(out)
