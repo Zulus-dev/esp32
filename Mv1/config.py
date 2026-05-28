@@ -49,8 +49,16 @@ class Config:
     RADIO_POWER_PIN = const(10)
     RF_POWER_PIN = const(5)
     RADIO_BOOT_WAIT_MS = const(1200)
-    RADIO_SHUTDOWN_WAIT_MS = const(2000)
+    RADIO_SHUTDOWN_WAIT_MS = const(6000)
     RADIO_ACK_TIMEOUT_MS = const(3000)
+    RADIO_READY_CUT_DELAY_MS = const(150)
+    RADIO_LINK_STALE_MS = const(5000)
+    RADIO_LINK_LOST_MS = const(10000)
+    RADIO_LINK_RESTART_MS = const(10000)
+    RADIO_POWER_CYCLE_MS = const(500)
+
+    WDT_TIMEOUT_MS = const(8000)
+    WDT_FEED_MS = const(1000)
 
     INPUT_QUEUE_DEPTH = const(8)
     IDLE_GC_PERIOD_MS = const(5000)

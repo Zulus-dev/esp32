@@ -45,8 +45,10 @@ class ColibryRadioNode:
 
     async def command_loop(self):
         while self.running:
-            item = self.uart.read_tlv()
-            if item:
+            for _ in range(8):
+                item = self.uart.read_tlv()
+                if not item:
+                    break
                 cmd, payload = item
                 await self.handle_command(cmd, payload)
             await asyncio.sleep_ms(1)

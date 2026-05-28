@@ -37,7 +37,10 @@ class PowerManager:
             self.last_event = "ensure_b_online"
             return radio
         self.state = self.STATE_B_BOOTING
-        await radio.start()
+        if radio.powered and radio.link_lost:
+            await radio.restart()
+        else:
+            await radio.start()
         ok = await radio.wait_status(("B_BOOT_OK",), timeout_ms=5000)
         if not ok:
             self.state = self.STATE_FAULT
