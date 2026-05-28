@@ -25,5 +25,4 @@ class Config:
     NRF_MOSI = const(3)
     NRF_MISO = const(9)
 
-    RF_POWER_PIN = const(10)
     LED_PIN = const(10)

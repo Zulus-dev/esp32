@@ -41,7 +41,8 @@ async def subghz_scan(core):
 
 
 async def nrf_honeypot(core):
-    radio = await _ensure(core)
+    pwr = get_power_manager(core)
+    radio = await pwr.ensure_rf_on()
     radio.command(0x06)
     core.oled.show_message("NRF24", "HID honeypot\nstarted")
     await asyncio.sleep_ms(600)
