@@ -1,0 +1,2 @@
+# Colibry OS - MicroPython ESP32-C3
+# No PyPI dependencies — pure MicroPython + vendor libs
