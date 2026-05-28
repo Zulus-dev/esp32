@@ -23,7 +23,9 @@ class ColibryRadioNode:
         self.wifi = WiFiAuditManager(self.uart)
         self.ble = BLEManager(self.uart)
         self.running = True
-        self.rf_pin = machine.Pin(Config.RF_POWER_PIN, machine.Pin.OUT, value=0)
+        # RF module power (Q3) is controlled by Node A, not by Node B.
+        # This flag mirrors Node A's RF_ON/RF_OFF advisory commands only;
+        # Node B must not drive a GPIO for RF power.
         self.rf_on = False
         try:
             self.wdt = machine.WDT(timeout=6000)
@@ -58,12 +60,12 @@ class ColibryRadioNode:
     async def handle_command(self, cmd, payload):
         try:
             if cmd == CMD_RF_ON:
-                self.rf_pin.value(1)
+                # Advisory only: Node A has already enabled Q3 on its GPIO5.
                 self.rf_on = True
                 self.uart.send_tlv(TLV_STATUS, b"RF_ON_DONE")
             elif cmd == CMD_RF_OFF:
+                # Advisory only: Node A owns the RF power transistor.
                 self.stop_all()
-                self.rf_pin.value(0)
                 self.rf_on = False
                 self.uart.send_tlv(TLV_STATUS, b"RF_OFF_DONE")
             elif cmd == CMD_QUERY_POWER_STATE:
@@ -114,7 +116,6 @@ class ColibryRadioNode:
                 machine.reset()
             elif cmd == CMD_SHUTDOWN:
                 self.stop_all()
-                self.rf_pin.value(0)
                 self.rf_on = False
                 self.uart.send_tlv(TLV_STATUS, b"READY_FOR_POWER_OFF")
                 await asyncio.sleep_ms(40)
