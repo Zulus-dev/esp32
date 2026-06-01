@@ -238,7 +238,7 @@ class CC1101Manager:
         self.buffer = []
         if self.driver:
             try:
-                self.driver.idle(); self.driver.flush_rx(); self.driver.flush_tx(); self.driver.sleep()
+                self.driver.release_pins()
             except Exception as exc:
                 self._log("CC1101 stop warn: %s" % exc)
             self.driver = None

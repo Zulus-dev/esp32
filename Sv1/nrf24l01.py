@@ -1,6 +1,8 @@
 """NRF24L01 driver for MicroPython"""
 
 from micropython import const
+from machine import Pin
+from config import Config
 import utime
 
 # nRF24L01+ registers
@@ -203,6 +205,28 @@ class NRF24L01:
         self.ce(0)
         self.flush_tx()
         self.flush_rx()
+
+    def power_down(self):
+        self.ce(0)
+        self.flush_tx()
+        self.flush_rx()
+        self.reg_write(CONFIG, self.reg_read(CONFIG) & ~PWR_UP)
+
+    def release_pins(self):
+        """Power down NRF24L01 and release all module GPIO lines to high-Z."""
+        try:
+            self.power_down()
+        except Exception:
+            pass
+        try:
+            self.spi.deinit()
+        except Exception:
+            pass
+        for pin in (Config.NRF_CE, Config.NRF_CSN, Config.NRF_SCK, Config.NRF_MOSI, Config.NRF_MISO):
+            try:
+                Pin(pin, Pin.IN)
+            except Exception:
+                pass
 
     # returns True if any data available to recv
     def any(self):
