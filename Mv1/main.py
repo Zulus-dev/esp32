@@ -22,6 +22,7 @@ class ColibryCore:
         self.services = {}
         self.state = {"wifi": False, "server": False, "radio": False}
         self.self_latch = None
+        self.wdt = None
 
     async def boot(self):
         try:
@@ -56,6 +57,7 @@ class ColibryCore:
         self._tasks.append(asyncio.create_task(down.run()))
         self._tasks.append(asyncio.create_task(self._input_loop()))
         self._tasks.append(asyncio.create_task(self._idle_gc_loop()))
+        self._start_watchdog()
 
     async def run(self):
         await self.boot()
@@ -202,6 +204,22 @@ class ColibryCore:
             await asyncio.sleep_ms(Config.IDLE_GC_PERIOD_MS)
             gc.collect()
 
+    def _start_watchdog(self):
+        try:
+            self.wdt = machine.WDT(timeout=Config.WDT_TIMEOUT_MS)
+            self._tasks.append(asyncio.create_task(self._watchdog_loop()))
+        except Exception as exc:
+            self.wdt = None
+            print("[WDT] unavailable:", exc)
+
+    async def _watchdog_loop(self):
+        while True:
+            await asyncio.sleep_ms(Config.WDT_FEED_MS)
+            try:
+                self.wdt.feed()
+            except Exception as exc:
+                print("[WDT] feed failed:", exc)
+                return
 
     async def power_off_sequence(self):
         pwr = self.services.get("power")

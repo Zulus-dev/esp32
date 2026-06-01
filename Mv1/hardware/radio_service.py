@@ -74,10 +74,15 @@ class RadioService:
         self.packets = []
         self.rssi = []
         self.link_lost = False
+        self._link_lost_since_ms = 0
+        self._shutting_down = False
 
     async def start(self):
         if self.powered:
             return
+        self._shutting_down = False
+        self.link_lost = False
+        self._link_lost_since_ms = 0
         self._power = Pin(Config.RADIO_POWER_PIN, Pin.OUT, value=1)
         self.powered = True
         self.last_status = "BOOTING"
@@ -93,16 +98,29 @@ class RadioService:
         self.uart.send_tlv(msg_type, payload)
         self.last_status = "CMD 0x%02X" % msg_type
 
+    async def restart(self):
+        await self.stop(hard_power=True)
+        await asyncio.sleep_ms(Config.RADIO_POWER_CYCLE_MS)
+        await self.start()
+
     async def shutdown(self):
+        self._shutting_down = True
+        ready = False
         if self.uart:
             try:
                 self.command(0xFF)
-            except Exception:
-                pass
-            await asyncio.sleep_ms(Config.RADIO_SHUTDOWN_WAIT_MS)
+                ready = await self.wait_status(("READY_FOR_POWER_OFF",), timeout_ms=Config.RADIO_SHUTDOWN_WAIT_MS)
+            except Exception as exc:
+                self._add_event(TLV_LOG, ("shutdown warn: %s" % exc).encode())
+            if ready:
+                await asyncio.sleep_ms(Config.RADIO_READY_CUT_DELAY_MS)
+            else:
+                self._add_event(TLV_LOG, b"shutdown timeout; forced power cut")
         await self.stop(hard_power=True)
 
     async def stop(self, hard_power=False):
+        if hard_power:
+            self._shutting_down = True
         if self.uart:
             try:
                 self.uart.send_tlv(0x08)
@@ -118,28 +136,57 @@ class RadioService:
             self._power.value(0)
         self.powered = False if hard_power else self.powered
         self.online = False
+        if hard_power:
+            self.link_lost = False
+            self._link_lost_since_ms = 0
         self.last_status = "OFF" if hard_power else "STOPPED"
         self.core.update_status(radio=False if hard_power else self.powered)
         gc.collect()
 
     async def _listen_loop(self):
         while True:
-            item = self.uart.read_tlv() if self.uart else None
-            if item is not None:
+            for _ in range(8):
+                item = self.uart.read_tlv() if self.uart else None
+                if item is None:
+                    break
                 msg_type, payload = item
                 self._add_event(msg_type, payload)
                 if msg_type == TLV_KEEPALIVE:
                     self.online = True
+                    self.link_lost = False
+                    self._link_lost_since_ms = 0
                     self.last_seen_ms = _ticks_ms()
                 elif msg_type in (TLV_STATUS, TLV_LOG):
                     self.last_status = _payload_text(payload)
-            if self.online and self.last_seen_ms and _ticks_diff(_ticks_ms(), self.last_seen_ms) > 1800:
+
+            now = _ticks_ms()
+            if self.online and self.last_seen_ms and _ticks_diff(now, self.last_seen_ms) > Config.RADIO_LINK_STALE_MS:
                 self.online = False
-                self.last_status = "LINK_LOST"
-            if self.powered and self.last_seen_ms and _ticks_diff(_ticks_ms(), self.last_seen_ms) > 3000:
+                self.last_status = "LINK_STALE"
+            if self.powered and self.last_seen_ms and _ticks_diff(now, self.last_seen_ms) > Config.RADIO_LINK_LOST_MS:
+                if not self.link_lost:
+                    self._link_lost_since_ms = now
                 self.link_lost = True
                 self.last_status = "LINK_LOST"
+            if (
+                self.link_lost
+                and not self._shutting_down
+                and self._restart_task is None
+                and self._link_lost_since_ms
+                and _ticks_diff(now, self._link_lost_since_ms) > Config.RADIO_LINK_RESTART_MS
+            ):
+                self._restart_task = asyncio.create_task(self._restart_after_link_lost())
             await asyncio.sleep_ms(2)
+
+    async def _restart_after_link_lost(self):
+        try:
+            self._add_event(TLV_LOG, b"link lost; power-cycling Node B")
+            await self.restart()
+        except Exception as exc:
+            self.last_status = "RESTART_FAILED"
+            self._add_event(TLV_LOG, ("restart failed: %s" % exc).encode())
+        finally:
+            self._restart_task = None
 
     def _add_event(self, msg_type, payload):
         decoded = _decode_radio_payload(msg_type, payload)

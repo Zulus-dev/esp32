@@ -8,6 +8,7 @@ class NRF24Manager:
         self.uart = uart
         self.honeypot_active = False
         self.task = None
+        self.driver = None
 
     def start_honeypot(self, payload=None):
         self.honeypot_active = True
@@ -28,4 +29,10 @@ class NRF24Manager:
         if self.task:
             self.task.cancel()
             self.task = None
+        if self.driver:
+            try:
+                self.driver.release_pins()
+            except Exception as exc:
+                self.uart.send_log("NRF24 stop warn: %s" % exc)
+            self.driver = None
         self.uart.send_log("NRF24 stopped")

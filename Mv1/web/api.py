@@ -285,17 +285,17 @@ class FileAPI:
         elif action == "spectrum_sweep":
             radio = await pwr.ensure_rf_on(); radio.command(0x0F, _subghz_payload(data))
         elif action == "set_freq":
-            radio.command(0x01, _pack_freq(data.get("freq", 433.92)))
+            radio = await pwr.ensure_rf_on(); radio.command(0x01, _pack_freq(data.get("freq", 433.92)))
         elif action == "set_modulation":
-            radio.command(0x09, _subghz_payload(data))
+            radio = await pwr.ensure_rf_on(); radio.command(0x09, _subghz_payload(data))
         elif action == "set_power":
-            radio.command(0x0E, _subghz_payload(data))
+            radio = await pwr.ensure_rf_on(); radio.command(0x0E, _subghz_payload(data))
         elif action == "raw_tx":
             radio = await pwr.ensure_rf_on(); radio.command(0x0D, _subghz_payload(data))
         elif action == "replay":
             radio = await pwr.ensure_rf_on(); radio.command(0x0C, _subghz_payload(data))
         elif action == "nrf_honeypot":
-            radio.command(0x06)
+            radio = await pwr.ensure_rf_on(); radio.command(0x06)
         elif action == "ble_sniff":
             radio.command(0x07)
         elif action == "deauth":
