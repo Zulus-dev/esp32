@@ -12,6 +12,8 @@ class OLED:
         self.status_wifi = False
         self.status_server = False
         self.status_radio = False
+        self.battery_percent = None
+        self.battery_status = "UNKNOWN"
         self._last_status = None
         self.i2c = SoftI2C(
             scl=Pin(Config.OLED_SCL_PIN),
@@ -21,31 +23,39 @@ class OLED:
         self.display = SSD1306_I2C(Config.OLED_WIDTH, Config.OLED_HEIGHT, self.i2c)
         print("OLED initialized OK")
 
-    def set_status(self, *, wifi=None, server=None, radio=None, force=False):
+    def set_status(self, *, wifi=None, server=None, radio=None, battery=None, force=False):
         if wifi is not None:
             self.status_wifi = wifi
         if server is not None:
             self.status_server = server
         if radio is not None:
             self.status_radio = radio
-        state = (self.status_wifi, self.status_server, self.status_radio, gc.mem_free() // 1024)
+        if battery is not None:
+            self.battery_percent = battery.get("percent")
+            self.battery_status = battery.get("status", "UNKNOWN")
+        state = (self.status_wifi, self.status_server, self.status_radio, self.battery_percent, self.battery_status, gc.mem_free() // 1024)
         if force or state != self._last_status:
             self.draw_status(*state)
             self.display.show()
             self._last_status = state
 
-    def draw_status(self, wifi_on=None, srv_on=None, radio_on=None, mem_kb=None):
+    def draw_status(self, wifi_on=None, srv_on=None, radio_on=None, battery_percent=None, battery_status=None, mem_kb=None):
         wifi_on = self.status_wifi if wifi_on is None else wifi_on
         srv_on = self.status_server if srv_on is None else srv_on
         radio_on = self.status_radio if radio_on is None else radio_on
+        battery_percent = self.battery_percent if battery_percent is None else battery_percent
+        battery_status = self.battery_status if battery_status is None else battery_status
         mem_kb = gc.mem_free() // 1024 if mem_kb is None else mem_kb
         self.display.fill_rect(0, 0, Config.OLED_WIDTH, Config.OLED_STATUS_HEIGHT, 0)
         self.display.line(0, Config.OLED_STATUS_HEIGHT, Config.OLED_WIDTH, Config.OLED_STATUS_HEIGHT, 1)
         self.display.text("W" if wifi_on else ".", 2, 2, 1)
         self.display.text("S" if srv_on else ".", 14, 2, 1)
         self.display.text("R" if radio_on else ".", 26, 2, 1)
+        if battery_percent is not None:
+            prefix = "!" if battery_status in ("LOW", "CRITICAL") else ""
+            self.display.text((prefix + str(int(battery_percent)) + "%")[:5], 42, 2, 1)
         self.display.text(str(mem_kb) + "K", 92, 2, 1)
-        self._last_status = (wifi_on, srv_on, radio_on, mem_kb)
+        self._last_status = (wifi_on, srv_on, radio_on, battery_percent, battery_status, mem_kb)
 
     def show_menu(self, items, selected_idx):
         self.display.fill(0)

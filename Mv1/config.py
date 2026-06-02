@@ -40,11 +40,43 @@ class Config:
     RADIO_UART_TX_PIN = const(21)
     RADIO_UART_RX_PIN = const(20)
     RADIO_UART_BAUD = const(921600)
-    RADIO_POWER_PIN = const(10)
+
+    # Node A power switches:
+    # - SELF_LATCH_PIN holds Q1 high after the physical power button boots Node A.
+    # - RADIO_POWER_PIN drives Q2 and supplies/removes power to Node B.
+    # - RF_POWER_PIN drives Q3 and supplies/removes power to the RF modules.
     SELF_LATCH_PIN = const(7)
+    RADIO_POWER_PIN = const(10)
+    RF_POWER_PIN = const(5)
     RADIO_BOOT_WAIT_MS = const(1200)
-    RADIO_SHUTDOWN_WAIT_MS = const(2000)
+    RADIO_SHUTDOWN_WAIT_MS = const(6000)
     RADIO_ACK_TIMEOUT_MS = const(3000)
+    RADIO_READY_CUT_DELAY_MS = const(150)
+    RADIO_LINK_STALE_MS = const(5000)
+    RADIO_LINK_LOST_MS = const(10000)
+    RADIO_LINK_RESTART_MS = const(10000)
+    RADIO_POWER_CYCLE_MS = const(500)
+
+    WDT_TIMEOUT_MS = const(8000)
+    WDT_FEED_MS = const(1000)
+
+    # Battery/BMS voltage monitor on Node A. Hardware: BMS+ -> 100k -> ADC
+    # node -> 47k -> GND, with 100nF from ADC node to GND. If GPIO6 is not
+    # ADC-capable on a board revision, change BATTERY_ADC_PIN to a free ADC pin.
+    BATTERY_ADC_PIN = const(6)
+    BATTERY_DIVIDER_TOP_OHM = const(100_000)
+    BATTERY_DIVIDER_BOTTOM_OHM = const(47_000)
+    BATTERY_ADC_REF_MV = const(3300)
+    BATTERY_CALIBRATION_PERMILLE = const(1000)
+    BATTERY_EMPTY_MV = const(3300)
+    BATTERY_FULL_MV = const(4200)
+    BATTERY_LOW_PERCENT = const(25)
+    BATTERY_CRITICAL_PERCENT = const(10)
+    BATTERY_SAMPLE_COUNT = const(8)
+    BATTERY_POLL_MS = const(30000)
+    BATTERY_ALERT_REPEAT_MS = const(300000)
+    BATTERY_HISTORY_DEPTH = const(120)
+    BATTERY_TREND_DELTA_MV = const(8)
 
     INPUT_QUEUE_DEPTH = const(8)
     IDLE_GC_PERIOD_MS = const(5000)

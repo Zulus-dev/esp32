@@ -18,6 +18,29 @@ async def mem_info(core):
     return True
 
 
+async def battery_status(core):
+    battery = core.services.get("battery")
+    snap = battery.read() if battery else {"ok": False, "error": "battery_monitor_missing"}
+    if not snap.get("ok"):
+        core.oled.show_message("Battery", "Unavailable\n%s" % str(snap.get("error", ""))[:32])
+        return True
+    trend = snap.get("trend", "?")
+    arrow = "^" if trend == "UP" else "v" if trend == "DOWN" else "-"
+    core.oled.show_message(
+        "Battery",
+        "%.2f V %d%%\n%s %s\nmin %.2f max %.2f"
+        % (
+            snap.get("voltage", 0),
+            snap.get("percent", 0),
+            arrow,
+            snap.get("status", "UNKNOWN"),
+            snap.get("min_mv", 0) / 1000.0,
+            snap.get("max_mv", 0) / 1000.0,
+        ),
+    )
+    return True
+
+
 async def reboot(core):
     core.oled.show_message("Reboot", "Restarting...")
     await asyncio.sleep_ms(800)

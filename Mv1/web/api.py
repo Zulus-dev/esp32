@@ -45,6 +45,8 @@ class FileAPI:
                 await self._send_json(writer, {"ok": True})
             elif endpoint == "ping":
                 await self._send_json(writer, {"ok": True})
+            elif endpoint == "battery/status":
+                await self._battery_status(writer)
             elif endpoint == "wifi_settings":
                 if method == "GET":
                     await self._send_json(writer, self._load_wifi_settings())
@@ -248,6 +250,18 @@ class FileAPI:
         uos.rename(tmp, _WIFI_SETTINGS)
         await self._send_json(writer, {"ok": True, "settings": cfg, "restart_ap": True})
 
+    def _battery(self):
+        if self.core is None:
+            return None
+        return self.core.services.get("battery")
+
+    async def _battery_status(self, writer):
+        battery = self._battery()
+        if battery is None:
+            await self._send_json(writer, {"ok": False, "error": "battery_monitor_missing"})
+        else:
+            await self._send_json(writer, battery.read())
+
     def _radio(self):
         if self.core is None:
             return None
@@ -285,17 +299,17 @@ class FileAPI:
         elif action == "spectrum_sweep":
             radio = await pwr.ensure_rf_on(); radio.command(0x0F, _subghz_payload(data))
         elif action == "set_freq":
-            radio.command(0x01, _pack_freq(data.get("freq", 433.92)))
+            radio = await pwr.ensure_rf_on(); radio.command(0x01, _pack_freq(data.get("freq", 433.92)))
         elif action == "set_modulation":
-            radio.command(0x09, _subghz_payload(data))
+            radio = await pwr.ensure_rf_on(); radio.command(0x09, _subghz_payload(data))
         elif action == "set_power":
-            radio.command(0x0E, _subghz_payload(data))
+            radio = await pwr.ensure_rf_on(); radio.command(0x0E, _subghz_payload(data))
         elif action == "raw_tx":
             radio = await pwr.ensure_rf_on(); radio.command(0x0D, _subghz_payload(data))
         elif action == "replay":
             radio = await pwr.ensure_rf_on(); radio.command(0x0C, _subghz_payload(data))
         elif action == "nrf_honeypot":
-            radio.command(0x06)
+            radio = await pwr.ensure_rf_on(); radio.command(0x06)
         elif action == "ble_sniff":
             radio.command(0x07)
         elif action == "deauth":

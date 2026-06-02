@@ -177,6 +177,31 @@ class CC1101Driver:
     def sleep(self):
         self.idle(); self.strobe(self.SPWD); self.csn.value(1)
 
+    def release_pins(self):
+        """Put CC1101 to sleep and release all RF GPIO lines to high-Z.
+
+        Node A physically removes RF module power with Q3. Before Node A does
+        that, Node B must stop driving every CC1101 signal line to avoid
+        back-feeding the unpowered chip through its ESD protection paths.
+        A later RF_ON recreates this driver, which reinitializes SPI/GPIO.
+        """
+        try:
+            self.idle()
+            self.flush_rx()
+            self.flush_tx()
+            self.sleep()
+        except Exception:
+            pass
+        try:
+            self.spi.deinit()
+        except Exception:
+            pass
+        for pin in (Config.CC_SCK, Config.CC_MOSI, Config.CC_MISO, Config.CC_CSN, Config.CC_GDO0):
+            try:
+                Pin(pin, Pin.IN)
+            except Exception:
+                pass
+
     def flush_rx(self):
         self.strobe(self.SIDLE); self.strobe(self.SFRX)
 
