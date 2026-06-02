@@ -3,6 +3,7 @@ import asyncio
 
 import gc
 import sys
+import time
 
 import machine
 from machine import Pin
@@ -23,6 +24,8 @@ class ColibryCore:
         self.state = {"wifi": False, "server": False, "radio": False}
         self.self_latch = None
         self.wdt = None
+        self.battery = None
+        self._last_battery_alert_ms = 0
 
     async def boot(self):
         try:
@@ -38,12 +41,15 @@ class ColibryCore:
         from hardware.buzzer import Buzzer
         from hardware.buttons import TouchButton
         from hardware.event_queue import EventQueue
+        from hardware.battery import BatteryMonitor
         from menu.manager import MenuManager
 
         self.oled = OLED()
         self.buzzer = Buzzer()
         self.menu = MenuManager(self.oled)
         self.input_queue = EventQueue(Config.INPUT_QUEUE_DEPTH)
+        self.battery = BatteryMonitor()
+        self.services["battery"] = self.battery
 
         self.oled.show_message("ColibryOS", "Starting...")
         await self.buzzer.boot_test()
@@ -57,6 +63,7 @@ class ColibryCore:
         self._tasks.append(asyncio.create_task(down.run()))
         self._tasks.append(asyncio.create_task(self._input_loop()))
         self._tasks.append(asyncio.create_task(self._idle_gc_loop()))
+        self._tasks.append(asyncio.create_task(self._battery_loop()))
         self._start_watchdog()
 
     async def run(self):
@@ -189,7 +196,7 @@ class ColibryCore:
     def free_mem(self):
         return self._free_mem()
 
-    def update_status(self, *, wifi=None, server=None, radio=None):
+    def update_status(self, *, wifi=None, server=None, radio=None, battery=None):
         if wifi is not None:
             self.state["wifi"] = wifi
         if server is not None:
@@ -197,7 +204,30 @@ class ColibryCore:
         if radio is not None:
             self.state["radio"] = radio
         if self.oled:
-            self.oled.set_status(wifi=self.state["wifi"], server=self.state["server"], radio=self.state["radio"])
+            self.oled.set_status(wifi=self.state["wifi"], server=self.state["server"], radio=self.state["radio"], battery=battery)
+
+    async def _battery_loop(self):
+        while True:
+            snap = self.battery.read() if self.battery else None
+            if snap:
+                self.update_status(battery=snap)
+                await self._battery_alert(snap)
+            await asyncio.sleep_ms(Config.BATTERY_POLL_MS)
+
+    async def _battery_alert(self, snap):
+        if not snap.get("ok") or snap.get("status") not in ("LOW", "CRITICAL"):
+            return
+        now = _ticks_ms()
+        if self._last_battery_alert_ms and _ticks_diff(now, self._last_battery_alert_ms) < Config.BATTERY_ALERT_REPEAT_MS:
+            return
+        self._last_battery_alert_ms = now
+        try:
+            if self.buzzer:
+                await self.buzzer.beep(Config.BUZZER_WARN_HZ if snap.get("status") == "LOW" else Config.BUZZER_ERROR_HZ, 90)
+            if snap.get("status") == "CRITICAL" and self.oled:
+                self.oled.show_message("Battery", "Critical %d%%\n%.2f V\nPower off?" % (snap.get("percent", 0), snap.get("voltage", 0)))
+        except Exception:
+            pass
 
     async def _idle_gc_loop(self):
         while True:
@@ -238,6 +268,20 @@ class ColibryCore:
             return gc.mem_free()
         except AttributeError:
             return 0
+
+
+def _ticks_ms():
+    try:
+        return time.ticks_ms()
+    except Exception:
+        return int(time.time() * 1000)
+
+
+def _ticks_diff(new, old):
+    try:
+        return time.ticks_diff(new, old)
+    except Exception:
+        return new - old
 
 
 async def main():

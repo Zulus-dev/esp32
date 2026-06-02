@@ -82,6 +82,12 @@
         "entry": "mem_info"
       },
       {
+        "name": "Battery",
+        "type": "module",
+        "module": "modules.system.manager",
+        "entry": "battery_status"
+      },
+      {
         "name": "About sys",
         "type": "module",
         "module": "modules.system.manager",

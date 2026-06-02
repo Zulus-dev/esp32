@@ -45,6 +45,8 @@ class FileAPI:
                 await self._send_json(writer, {"ok": True})
             elif endpoint == "ping":
                 await self._send_json(writer, {"ok": True})
+            elif endpoint == "battery/status":
+                await self._battery_status(writer)
             elif endpoint == "wifi_settings":
                 if method == "GET":
                     await self._send_json(writer, self._load_wifi_settings())
@@ -247,6 +249,18 @@ class FileAPI:
             pass
         uos.rename(tmp, _WIFI_SETTINGS)
         await self._send_json(writer, {"ok": True, "settings": cfg, "restart_ap": True})
+
+    def _battery(self):
+        if self.core is None:
+            return None
+        return self.core.services.get("battery")
+
+    async def _battery_status(self, writer):
+        battery = self._battery()
+        if battery is None:
+            await self._send_json(writer, {"ok": False, "error": "battery_monitor_missing"})
+        else:
+            await self._send_json(writer, battery.read())
 
     def _radio(self):
         if self.core is None:
