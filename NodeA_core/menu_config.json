@@ -2,29 +2,242 @@
   "main": {
     "name": "Main menu",
     "items": [
-      {"name": "WiFi", "type": "submenu", "target": "wifi"},
-      {"name": "Power B", "type": "submenu", "target": "power"},
-      {"name": "Reboot", "type": "module", "module": "modules.power.actions", "entry": "reboot"},
-      {"name": "Power off", "type": "module", "module": "modules.power.actions", "entry": "power_off"}
+      {
+        "name": "WiFi",
+        "type": "submenu",
+        "target": "wifi"
+      },
+      {
+        "name": "Radio",
+        "type": "submenu",
+        "target": "radio"
+      },
+      {
+        "name": "Power B",
+        "type": "submenu",
+        "target": "power"
+      },
+      {
+        "name": "Reboot",
+        "type": "module",
+        "module": "modules.power.actions",
+        "entry": "reboot"
+      },
+      {
+        "name": "Power off",
+        "type": "module",
+        "module": "modules.power.actions",
+        "entry": "power_off"
+      }
     ]
   },
   "wifi": {
     "name": "WiFi",
     "items": [
-      {"name": "On AP", "type": "module", "module": "modules.wifi.manager", "entry": "wifi_on"},
-      {"name": "Off AP", "type": "module", "module": "modules.wifi.manager", "entry": "wifi_off"},
-      {"name": "Back", "type": "back"}
+      {
+        "name": "On AP",
+        "type": "module",
+        "module": "modules.wifi.manager",
+        "entry": "wifi_on"
+      },
+      {
+        "name": "Off AP",
+        "type": "module",
+        "module": "modules.wifi.manager",
+        "entry": "wifi_off"
+      },
+      {
+        "name": "Back",
+        "type": "back"
+      }
     ]
   },
   "power": {
     "name": "Power B",
     "items": [
-      {"name": "Node B ON", "type": "module", "module": "modules.power.actions", "entry": "node_b_on"},
-      {"name": "Node B OFF", "type": "module", "module": "modules.power.actions", "entry": "node_b_off"},
-      {"name": "RF ON", "type": "module", "module": "modules.power.actions", "entry": "rf_on"},
-      {"name": "RF OFF", "type": "module", "module": "modules.power.actions", "entry": "rf_off"},
-      {"name": "Status", "type": "module", "module": "modules.power.actions", "entry": "status"},
-      {"name": "Back", "type": "back"}
+      {
+        "name": "Node B ON",
+        "type": "module",
+        "module": "modules.power.actions",
+        "entry": "node_b_on"
+      },
+      {
+        "name": "Node B OFF",
+        "type": "module",
+        "module": "modules.power.actions",
+        "entry": "node_b_off"
+      },
+      {
+        "name": "RF ON",
+        "type": "module",
+        "module": "modules.power.actions",
+        "entry": "rf_on"
+      },
+      {
+        "name": "RF OFF",
+        "type": "module",
+        "module": "modules.power.actions",
+        "entry": "rf_off"
+      },
+      {
+        "name": "Status",
+        "type": "module",
+        "module": "modules.power.actions",
+        "entry": "status"
+      },
+      {
+        "name": "Back",
+        "type": "back"
+      }
+    ]
+  },
+  "radio": {
+    "name": "Radio",
+    "items": [
+      {
+        "name": "Sub-GHz",
+        "type": "submenu",
+        "target": "radio_sub"
+      },
+      {
+        "name": "NRF",
+        "type": "submenu",
+        "target": "radio_nrf"
+      },
+      {
+        "name": "WiFi audit",
+        "type": "submenu",
+        "target": "radio_wifi"
+      },
+      {
+        "name": "BLE",
+        "type": "submenu",
+        "target": "radio_ble"
+      },
+      {
+        "name": "Back",
+        "type": "back"
+      }
+    ]
+  },
+  "radio_sub": {
+    "name": "Sub-GHz",
+    "items": [
+      {
+        "name": "ON",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "sub_on"
+      },
+      {
+        "name": "Scan",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "sub_scan"
+      },
+      {
+        "name": "Sniff",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "sub_sniff"
+      },
+      {
+        "name": "RSSI",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "sub_rssi"
+      },
+      {
+        "name": "Replay",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "sub_replay"
+      },
+      {
+        "name": "OFF",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "sub_off"
+      },
+      {
+        "name": "Back",
+        "type": "back"
+      }
+    ]
+  },
+  "radio_nrf": {
+    "name": "NRF",
+    "items": [
+      {
+        "name": "ON",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "nrf_on"
+      },
+      {
+        "name": "HID sniff",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "nrf_hid"
+      },
+      {
+        "name": "Honeypot",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "nrf_honeypot"
+      },
+      {
+        "name": "OFF",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "nrf_off"
+      },
+      {
+        "name": "Back",
+        "type": "back"
+      }
+    ]
+  },
+  "radio_wifi": {
+    "name": "WiFi audit",
+    "items": [
+      {
+        "name": "Scan AP",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "wifi_scan"
+      },
+      {
+        "name": "OFF",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "wifi_off"
+      },
+      {
+        "name": "Back",
+        "type": "back"
+      }
+    ]
+  },
+  "radio_ble": {
+    "name": "BLE",
+    "items": [
+      {
+        "name": "Scan",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "ble_scan"
+      },
+      {
+        "name": "OFF",
+        "type": "module",
+        "module": "modules.radio_actions",
+        "entry": "ble_off"
+      },
+      {
+        "name": "Back",
+        "type": "back"
+      }
     ]
   }
 }

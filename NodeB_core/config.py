@@ -18,3 +18,11 @@ class Config:
     CC_GDO0 = const(6)
 
     WDT_TIMEOUT_MS = const(6000)
+
+    # NRF24L01+ pins (override per wiring)
+    NRF_SCK = const(4)
+    NRF_MOSI = const(3)
+    NRF_MISO = const(2)
+    NRF_CSN = const(8)
+    NRF_CE = const(9)
+    NRF_IRQ = const(10)

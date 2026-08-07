@@ -22,6 +22,9 @@ class ColibryNodeB:
         self.rf_rail = False
         self.active_mod = MOD_NONE
         self.mod_state = KA_STATE_IDLE
+        self._manager = None
+        self._manager_mod = MOD_NONE
+        self._boot_status_left = 12
         try:
             self.wdt = machine.WDT(timeout=Config.WDT_TIMEOUT_MS)
         except Exception:
@@ -43,6 +46,9 @@ class ColibryNodeB:
             except Exception:
                 pass
             self.link.send_keepalive(free_kb, self._ka_flags(), self.mod_state)
+            if self._boot_status_left > 0:
+                self.link.send_status(ST_BOOT_OK)
+                self._boot_status_left -= 1
             await asyncio.sleep_ms(2000)
 
     async def command_loop(self):
@@ -59,25 +65,47 @@ class ColibryNodeB:
                 n += 1
             await asyncio.sleep_ms(8 if n else 20)
 
-    def _mod_off(self):
+    async def _mod_off(self):
+        if self._manager:
+            try:
+                await self._manager.stop()
+            except Exception:
+                pass
+        self._manager = None
+        self._manager_mod = MOD_NONE
         self.active_mod = MOD_NONE
         self.mod_state = KA_STATE_IDLE
-        gc.collect()
+        self._purge_rf_modules()
+        gc.collect(); gc.collect()
+
+    def _purge_rf_modules(self):
+        try:
+            import sys
+            for n in tuple(sys.modules.keys()):
+                if n.startswith("radio.managers.") or n.startswith("radio.drivers."):
+                    sys.modules.pop(n, None)
+        except Exception:
+            pass
+        try:
+            from lib import mempool
+            mempool.drop_rf()
+        except Exception:
+            pass
 
     async def handle_command(self, cmd, payload):
         if cmd == CMD_RF_ON:
             self.rf_rail = True
             self.link.send_status(ST_RF_ON_DONE)
         elif cmd == CMD_RF_OFF:
-            self._mod_off()
+            await self._mod_off()
             self.rf_rail = False
             self.link.send_status(ST_RF_OFF_DONE)
         elif cmd == CMD_PREPARE_SHUTDOWN:
-            self._mod_off()
+            await self._mod_off()
             self.rf_rail = False
             self.link.send_status(ST_PREPARE_DONE)
         elif cmd == CMD_STOP_ALL:
-            self._mod_off()
+            await self._mod_off()
             self.link.send_status(ST_STOPPED)
         elif cmd == CMD_QUERY:
             code = ST_RF_ON_DONE if self.rf_rail else ST_RF_OFF_DONE
@@ -86,7 +114,7 @@ class ColibryNodeB:
             await asyncio.sleep_ms(30)
             machine.reset()
         elif cmd == CMD_SHUTDOWN:
-            self._mod_off()
+            await self._mod_off()
             self.rf_rail = False
             self.link.send_status(ST_READY_POWER_OFF)
             await asyncio.sleep_ms(40)
@@ -104,19 +132,35 @@ class ColibryNodeB:
         op = payload[0] if payload else OP_CONFIG
         if op == OP_STOP:
             if self.active_mod == mod_id:
-                self._mod_off()
-            self.link.send_status(ST_MOD_OFF, mod_id)
+                await self._mod_off()
+            else:
+                self.link.send_status(ST_MOD_OFF, mod_id)
             return
         if self.active_mod not in (MOD_NONE, mod_id):
-            self._mod_off()
+            await self._mod_off()
         self.rf_rail = True
-        self.active_mod = mod_id
-        if op == OP_START and len(payload) > 1:
-            mode = payload[1]
-            self.mod_state = KA_STATE_SCAN if mode == SUB_MODE_SCAN else KA_STATE_SNIFF
-        else:
-            self.mod_state = KA_STATE_IDLE
-        self.link.send_status(ST_MOD_ON, mod_id)
+        try:
+            mgr = self._manager
+            if mgr is None or self._manager_mod != mod_id:
+                if mod_id == MOD_SUBGHZ:
+                    from radio.managers.subghz import Manager
+                elif mod_id == MOD_NRF:
+                    from radio.managers.nrf24 import Manager
+                elif mod_id == MOD_WIFI:
+                    from radio.managers.wifi_audit import Manager
+                elif mod_id == MOD_BLE:
+                    from radio.managers.ble import Manager
+                else:
+                    self.link.send_status(ST_UNSUPPORTED)
+                    return
+                mgr = Manager(self.link)
+                self._manager = mgr
+                self._manager_mod = mod_id
+            self.active_mod = mod_id
+            self.mod_state = await mgr.handle(payload)
+        except Exception:
+            self.link.send_status(ST_ERR, ERR_HW)
+            await self._mod_off()
 
     async def run(self):
         try:

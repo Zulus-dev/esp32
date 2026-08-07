@@ -7,7 +7,7 @@ from machine import UART
 
 from config import Config
 from lib.slip_tlv import SlipDecoder, build_tlv
-from protocol import TLV_STATUS, TLV_KEEPALIVE, TLV_RSSI, ST_BOOT_OK
+from protocol import TLV_STATUS, TLV_KEEPALIVE, TLV_RSSI, TLV_PKT, TLV_NRF_EVENT, TLV_WIFI_FRAME, TLV_BLE_ADV, TLV_SCAN_RESULT, ST_BOOT_OK
 
 
 def _ticks():
@@ -50,6 +50,8 @@ class LinkClient:
         self.last_rssi_freq = 0
         self.rx_frames = 0
         self.rx_crc_fail = 0
+        self.events = [None] * 24
+        self.event_pos = 0
 
     def flush_rx(self):
         try:
@@ -99,6 +101,29 @@ class LinkClient:
             last = mtype
         return last
 
+    def _push_event(self, kind, a=0, b=0, c=0, data=None):
+        raw = ""
+        if data:
+            try:
+                raw = bytes(data[:24]).hex()
+            except Exception:
+                raw = ""
+        self.events[self.event_pos] = {"t": _ticks(), "k": kind, "a": a, "b": b, "c": c, "hex": raw}
+        self.event_pos = (self.event_pos + 1) % len(self.events)
+
+    def clear_events(self):
+        self.events = [None] * len(self.events)
+        self.event_pos = 0
+
+    def event_snapshot(self):
+        out = []
+        n = len(self.events)
+        for i in range(n):
+            e = self.events[(self.event_pos + i) % n]
+            if e is not None:
+                out.append(e)
+        return out
+
     def _handle(self, mtype, payload):
         now = _ticks()
         if mtype == TLV_STATUS and payload is not None and len(payload) >= 1:
@@ -127,6 +152,18 @@ class LinkClient:
             if r >= 128:
                 r -= 256
             self.last_rssi = r
+            self._push_event("rssi", self.last_rssi_freq, r, 0, None)
+        elif mtype in (TLV_PKT, TLV_NRF_EVENT, TLV_WIFI_FRAME, TLV_BLE_ADV, TLV_SCAN_RESULT) and payload is not None:
+            a = payload[0] if len(payload) > 0 else 0
+            b = payload[1] if len(payload) > 1 else 0
+            c = payload[2] if len(payload) > 2 else 0
+            self._push_event("evt", a, b, c, payload)
+
+    def ka_age_ms(self):
+        return _diff(_ticks(), self.last_ka_ms) if self.last_ka_ms else 0
+
+    def status_age_ms(self):
+        return _diff(_ticks(), self.last_status_ms) if self.last_status_ms else 0
 
     def online(self, stale_ms=6000):
         if not self.boot_ok:

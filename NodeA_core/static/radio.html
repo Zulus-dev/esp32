@@ -35,7 +35,7 @@
     <h1 style="margin:0;font-size:18px;">Radio</h1>
   </div>
   <div class="status-bar">
-    <div class="pill"><span class="dot" id="dLink"></span>Link<br><b id="sLink">—</b></div>
+    <div class="pill"><span class="dot" id="dLink"></span>Link<br><b id="sLink">—</b><div class="truth" id="tLink">rx=0 crc=0</div></div>
     <div class="pill"><span class="dot" id="dB"></span>Node B<br><b id="sB">—</b><div class="truth" id="tB">Q2=?</div></div>
     <div class="pill"><span class="dot" id="dRail"></span>RF rail (Q3)<br><b id="sRail">—</b><div class="truth" id="tRail">Q3=?</div></div>
     <div class="pill"><span class="dot" id="dMod"></span>Active module<br><b id="sMod">none</b><div class="truth" id="tMod">state=—</div></div>
@@ -47,6 +47,7 @@
       <button type="button" id="btnBOff" class="btn-danger">Node B OFF</button>
     </div>
     <p class="hint">ON: Q2↑ → BOOT_OK/keepalive. «power / no link» если Q2=1, а B молчит.</p>
+    <div class="row"><button type="button" id="btnLive">Live: OFF</button><button type="button" id="btnSave">Save session</button><button type="button" id="btnClear">Clear RAM log</button></div>
   </div>
   <div class="panel">
     <h2>2 · Modules (exclusive · shared Q3)</h2>
@@ -80,6 +81,8 @@
       <div class="row">
         <button type="button" id="btnNrfOn">NRF ON</button>
         <button type="button" id="btnNrfOff" class="btn-danger">NRF OFF</button>
+        <button type="button" id="btnNrfHid">HID sniff</button>
+        <button type="button" id="btnNrfHoney">Honeypot</button>
       </div>
       <div class="log" id="log-nrf">NRF…</div>
     </div>
@@ -87,6 +90,7 @@
       <div class="row">
         <button type="button" id="btnWifiOn">WiFi-aud ON</button>
         <button type="button" id="btnWifiOff" class="btn-danger">WiFi-aud OFF</button>
+        <button type="button" id="btnWifiScan">Scan AP</button>
       </div>
       <div class="log" id="log-wifi">WiFi…</div>
     </div>
@@ -94,6 +98,7 @@
       <div class="row">
         <button type="button" id="btnBleOn">BLE ON</button>
         <button type="button" id="btnBleOff" class="btn-danger">BLE OFF</button>
+        <button type="button" id="btnBleScan">Scan ADV</button>
       </div>
       <div class="log" id="log-ble">BLE…</div>
     </div>
@@ -119,6 +124,7 @@ function apply(s) {
   if (!s) return;
   const L = s.link || {}, P = s.power || {}, M = s.module || {};
   $('sLink').textContent = L.online ? 'online' : (L.pending ? 'waiting' : 'offline');
+  $('tLink').textContent = 'rx=' + (L.rx_frames || 0) + ' crc=' + (L.crc_fail || 0) + ' ka_age=' + (L.ka_age_ms || 0) + ' free=' + (L.ka_free_kb || 0) + 'k';
   setDot('dLink', L.online ? 'on' : L.pending ? 'warn' : '');
   $('sB').textContent = P.node_b_online ? 'online' : (P.powered || P.q2 ? 'powered' : 'off');
   setDot('dB', P.node_b_online ? 'on' : (P.powered || P.q2) ? 'warn' : '');
@@ -131,7 +137,11 @@ function apply(s) {
   $('tMod').textContent = 'state=' + (M.state || '—') + ' letter=' + (M.letter || '.');
   if (s.telemetry && s.telemetry.last_rssi != null)
     log('subghz', 'RSSI ' + s.telemetry.freq_khz + ' → ' + s.telemetry.last_rssi + ' dBm');
+  if (s.telemetry && s.telemetry.events) {
+    s.telemetry.events.slice(-3).forEach((e) => log(M.name || 'subghz', e.k + ' a=' + e.a + ' b=' + e.b + ' ' + (e.hex || '')));
+  }
 }
+let live = false;
 async function refresh() {
   try {
     const s = await api('radio/status');
@@ -155,10 +165,14 @@ $('btnSubOn').onclick = () => cmd('module_on', 'subghz');
 $('btnSubOff').onclick = () => cmd('module_off', 'subghz');
 $('btnNrfOn').onclick = () => cmd('module_on', 'nrf');
 $('btnNrfOff').onclick = () => cmd('module_off', 'nrf');
+$('btnNrfHid').onclick = () => cmd('hid_sniff', 'nrf');
+$('btnNrfHoney').onclick = () => cmd('honeypot', 'nrf');
 $('btnWifiOn').onclick = () => cmd('module_on', 'wifi');
 $('btnWifiOff').onclick = () => cmd('module_off', 'wifi');
+$('btnWifiScan').onclick = () => cmd('wifi_scan', 'wifi');
 $('btnBleOn').onclick = () => cmd('module_on', 'ble');
 $('btnBleOff').onclick = () => cmd('module_off', 'ble');
+$('btnBleScan').onclick = () => cmd('ble_scan', 'ble');
 $('btnScan').onclick = () => cmd('scan', 'subghz');
 $('btnSniff').onclick = () => cmd('sniff', 'subghz');
 $('btnRssi').onclick = () => cmd('rssi_once', 'subghz');
@@ -173,7 +187,11 @@ document.querySelectorAll('.tab').forEach((tab) => {
   };
 });
 refresh();
+$('btnLive').onclick = () => { live = !live; $('btnLive').textContent = 'Live: ' + (live ? 'ON' : 'OFF'); };
+$('btnSave').onclick = async () => { const r = await api('radio/log', 'POST', {action:'save'}); log('subghz', 'save ' + (r.path || r.error || 'ok')); };
+$('btnClear').onclick = async () => { await api('radio/log', 'POST', {action:'clear'}); ['subghz','nrf','wifi','ble'].forEach((m)=>{ const e=$('log-'+m); if(e) e.textContent=''; }); };
 setInterval(refresh, 2500);
+setInterval(() => { if (live) refresh(); }, 600);
 </script>
 </body>
 </html>

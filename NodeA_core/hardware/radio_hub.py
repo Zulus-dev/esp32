@@ -84,13 +84,25 @@ class RadioHub:
             pass
 
     async def _rx_loop(self):
+        miss = 0
         while self.link is not None:
             try:
-                self.link.poll()
+                pwr = self._pwr()
+                loops = 8 if (pwr.powered and not self.link.online()) else 2
+                for _ in range(loops):
+                    self.link.poll()
+                    await asyncio.sleep_ms(20)
+                if pwr.powered and not self.link.online():
+                    miss += 1
+                    if miss >= 10:
+                        # soft UART reconnect, Q2 remains unchanged
+                        self.link.close(); self.link = None; self._ensure_link(); self.link.flush_rx(); miss = 0
+                else:
+                    miss = 0
                 self._refresh_ui(False)
             except Exception:
                 pass
-            await asyncio.sleep_ms(250)
+            await asyncio.sleep_ms(120)
 
     def _start_rx(self):
         if self._rx_task is None:
@@ -228,7 +240,7 @@ class RadioHub:
             await self.module_on(mod_id if action == "module_on" else (self.active_mod or MOD_SUBGHZ))
         elif action in ("module_off", "rf_off", "stop_all"):
             await self.module_off(rail_off=True)
-        elif action in ("scan", "sniff", "rssi_once", "stop"):
+        elif action in ("scan", "sniff", "rssi_once", "hid_sniff", "honeypot", "ble_scan", "wifi_scan", "replay", "stop"):
             if self.active_mod != mod_id:
                 await self.module_on(mod_id)
             link = self._ensure_link()
@@ -241,17 +253,28 @@ class RadioHub:
                 buf = bytearray(1)
                 buf[0] = OP_ONCE
                 link.send_cmd(mod_id, buf)
+            elif action == "replay":
+                buf = bytearray(1)
+                buf[0] = OP_REPLAY
+                link.send_cmd(mod_id, buf)
             else:
                 fk = int(data.get("freq_khz") or 433920)
                 body = bytearray(6)
                 body[0] = OP_START
-                body[1] = SUB_MODE_SCAN if action == "scan" else SUB_MODE_SNIFF
-                body[2] = (fk >> 24) & 0xFF
-                body[3] = (fk >> 16) & 0xFF
-                body[4] = (fk >> 8) & 0xFF
-                body[5] = fk & 0xFF
+                if mod_id == MOD_SUBGHZ:
+                    body[1] = SUB_MODE_SCAN if action == "scan" else SUB_MODE_SNIFF
+                    body[2] = (fk >> 24) & 0xFF
+                    body[3] = (fk >> 16) & 0xFF
+                    body[4] = (fk >> 8) & 0xFF
+                    body[5] = fk & 0xFF
+                elif mod_id == MOD_NRF:
+                    body[1] = NRF_MODE_HONEYPOT if action == "honeypot" else NRF_MODE_HID
+                elif mod_id == MOD_WIFI:
+                    body[1] = WIFI_MODE_SCAN
+                elif mod_id == MOD_BLE:
+                    body[1] = BLE_MODE_SCAN
                 link.send_cmd(mod_id, body)
-                self.mod_state = 3 if action == "scan" else 4
+                self.mod_state = 3 if action in ("scan", "wifi_scan", "ble_scan") else 4
             for _ in range(6):
                 link.poll()
                 await asyncio.sleep_ms(20)
@@ -278,6 +301,8 @@ class RadioHub:
                 "rx_frames": link.rx_frames if link else 0,
                 "crc_fail": link.rx_crc_fail if link else 0,
                 "ka_free_kb": link.ka_free_kb if link else 0,
+                "ka_age_ms": link.ka_age_ms() if link else 0,
+                "status_age_ms": link.status_age_ms() if link else 0,
             },
             "power": {
                 "state": pwr.state,
@@ -301,12 +326,46 @@ class RadioHub:
                 "state": states[ms],
                 "letter": letter if rf_on else ".",
             },
-            "telemetry": (
-                {"last_rssi": link.last_rssi, "freq_khz": link.last_rssi_freq}
-                if link and link.last_rssi is not None
-                else {}
-            ),
+            "telemetry": {
+                "last_rssi": link.last_rssi if link else None,
+                "freq_khz": link.last_rssi_freq if link else 0,
+                "events": link.event_snapshot() if link else [],
+            },
         }
+
+    def clear_log(self):
+        if self.link:
+            self.link.clear_events()
+        return True
+
+    def save_session(self, clear=False):
+        # Explicit user action only; bounded JSONL, max about 16KB.
+        if not self.link:
+            return {"ok": False, "error": "no_link"}
+        try:
+            import uos, time, ujson
+        except Exception:
+            return {"ok": False, "error": "no_fs"}
+        try:
+            uos.mkdir("/sessions")
+        except Exception:
+            pass
+        try:
+            ts = time.localtime()
+            name = "/sessions/%04d%02d%02d_%02d%02d%02d_%s.jsonl" % (ts[0],ts[1],ts[2],ts[3],ts[4],ts[5], self.snapshot()["module"]["name"])
+        except Exception:
+            name = "/sessions/session_radio.jsonl"
+        total = 0
+        with open(name, "w") as f:
+            for e in self.link.event_snapshot():
+                line = ujson.dumps(e) + "\n"
+                total += len(line)
+                if total > 16 * 1024:
+                    break
+                f.write(line)
+        if clear:
+            self.link.clear_events()
+        return {"ok": True, "path": name, "bytes": total}
 
     def close(self):
         self._drop_link()
