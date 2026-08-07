@@ -228,7 +228,7 @@ class RadioHub:
             await self.module_on(mod_id if action == "module_on" else (self.active_mod or MOD_SUBGHZ))
         elif action in ("module_off", "rf_off", "stop_all"):
             await self.module_off(rail_off=True)
-        elif action in ("scan", "sniff", "rssi_once", "stop"):
+        elif action in ("scan", "sniff", "rssi_once", "hid_sniff", "honeypot", "ble_scan", "wifi_scan", "replay", "stop"):
             if self.active_mod != mod_id:
                 await self.module_on(mod_id)
             link = self._ensure_link()
@@ -241,17 +241,28 @@ class RadioHub:
                 buf = bytearray(1)
                 buf[0] = OP_ONCE
                 link.send_cmd(mod_id, buf)
+            elif action == "replay":
+                buf = bytearray(1)
+                buf[0] = OP_REPLAY
+                link.send_cmd(mod_id, buf)
             else:
                 fk = int(data.get("freq_khz") or 433920)
                 body = bytearray(6)
                 body[0] = OP_START
-                body[1] = SUB_MODE_SCAN if action == "scan" else SUB_MODE_SNIFF
-                body[2] = (fk >> 24) & 0xFF
-                body[3] = (fk >> 16) & 0xFF
-                body[4] = (fk >> 8) & 0xFF
-                body[5] = fk & 0xFF
+                if mod_id == MOD_SUBGHZ:
+                    body[1] = SUB_MODE_SCAN if action == "scan" else SUB_MODE_SNIFF
+                    body[2] = (fk >> 24) & 0xFF
+                    body[3] = (fk >> 16) & 0xFF
+                    body[4] = (fk >> 8) & 0xFF
+                    body[5] = fk & 0xFF
+                elif mod_id == MOD_NRF:
+                    body[1] = NRF_MODE_HONEYPOT if action == "honeypot" else NRF_MODE_HID
+                elif mod_id == MOD_WIFI:
+                    body[1] = WIFI_MODE_SCAN
+                elif mod_id == MOD_BLE:
+                    body[1] = BLE_MODE_SCAN
                 link.send_cmd(mod_id, body)
-                self.mod_state = 3 if action == "scan" else 4
+                self.mod_state = 3 if action in ("scan", "wifi_scan", "ble_scan") else 4
             for _ in range(6):
                 link.poll()
                 await asyncio.sleep_ms(20)
@@ -301,11 +312,11 @@ class RadioHub:
                 "state": states[ms],
                 "letter": letter if rf_on else ".",
             },
-            "telemetry": (
-                {"last_rssi": link.last_rssi, "freq_khz": link.last_rssi_freq}
-                if link and link.last_rssi is not None
-                else {}
-            ),
+            "telemetry": {
+                "last_rssi": link.last_rssi if link else None,
+                "freq_khz": link.last_rssi_freq if link else 0,
+                "events": link.event_snapshot() if link else [],
+            },
         }
 
     def close(self):

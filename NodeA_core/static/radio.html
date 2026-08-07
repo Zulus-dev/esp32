@@ -80,6 +80,8 @@
       <div class="row">
         <button type="button" id="btnNrfOn">NRF ON</button>
         <button type="button" id="btnNrfOff" class="btn-danger">NRF OFF</button>
+        <button type="button" id="btnNrfHid">HID sniff</button>
+        <button type="button" id="btnNrfHoney">Honeypot</button>
       </div>
       <div class="log" id="log-nrf">NRF…</div>
     </div>
@@ -87,6 +89,7 @@
       <div class="row">
         <button type="button" id="btnWifiOn">WiFi-aud ON</button>
         <button type="button" id="btnWifiOff" class="btn-danger">WiFi-aud OFF</button>
+        <button type="button" id="btnWifiScan">Scan AP</button>
       </div>
       <div class="log" id="log-wifi">WiFi…</div>
     </div>
@@ -94,6 +97,7 @@
       <div class="row">
         <button type="button" id="btnBleOn">BLE ON</button>
         <button type="button" id="btnBleOff" class="btn-danger">BLE OFF</button>
+        <button type="button" id="btnBleScan">Scan ADV</button>
       </div>
       <div class="log" id="log-ble">BLE…</div>
     </div>
@@ -131,6 +135,9 @@ function apply(s) {
   $('tMod').textContent = 'state=' + (M.state || '—') + ' letter=' + (M.letter || '.');
   if (s.telemetry && s.telemetry.last_rssi != null)
     log('subghz', 'RSSI ' + s.telemetry.freq_khz + ' → ' + s.telemetry.last_rssi + ' dBm');
+  if (s.telemetry && s.telemetry.events) {
+    s.telemetry.events.slice(-3).forEach((e) => log(M.name || 'subghz', e.k + ' a=' + e.a + ' b=' + e.b + ' ' + (e.hex || '')));
+  }
 }
 async function refresh() {
   try {
@@ -155,10 +162,14 @@ $('btnSubOn').onclick = () => cmd('module_on', 'subghz');
 $('btnSubOff').onclick = () => cmd('module_off', 'subghz');
 $('btnNrfOn').onclick = () => cmd('module_on', 'nrf');
 $('btnNrfOff').onclick = () => cmd('module_off', 'nrf');
+$('btnNrfHid').onclick = () => cmd('hid_sniff', 'nrf');
+$('btnNrfHoney').onclick = () => cmd('honeypot', 'nrf');
 $('btnWifiOn').onclick = () => cmd('module_on', 'wifi');
 $('btnWifiOff').onclick = () => cmd('module_off', 'wifi');
+$('btnWifiScan').onclick = () => cmd('wifi_scan', 'wifi');
 $('btnBleOn').onclick = () => cmd('module_on', 'ble');
 $('btnBleOff').onclick = () => cmd('module_off', 'ble');
+$('btnBleScan').onclick = () => cmd('ble_scan', 'ble');
 $('btnScan').onclick = () => cmd('scan', 'subghz');
 $('btnSniff').onclick = () => cmd('sniff', 'subghz');
 $('btnRssi').onclick = () => cmd('rssi_once', 'subghz');
