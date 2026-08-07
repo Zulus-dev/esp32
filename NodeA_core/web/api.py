@@ -76,6 +76,9 @@ class FileAPI:
             elif endpoint == "radio/cmd" and method == "POST":
                 data = await self._read_json_body(reader, headers)
                 await self._radio_command(data, writer)
+            elif endpoint == "radio/log" and method == "POST":
+                data = await self._read_json_body(reader, headers)
+                await self._radio_log(data, writer)
             else:
                 await self._send_json(writer, {"error": "not_found"}, status="404 Not Found")
         except Exception as exc:
@@ -384,6 +387,17 @@ class FileAPI:
             except Exception:
                 pass
         await self._send_json(writer, hub.snapshot())
+
+    async def _radio_log(self, data, writer):
+        from hardware.radio_hub import get_radio_hub
+        if self.core is None:
+            raise ValueError("no_core")
+        hub = get_radio_hub(self.core)
+        action = data.get("action", "save")
+        if action == "clear":
+            hub.clear_log(); await self._send_json(writer, {"ok": True})
+        else:
+            await self._send_json(writer, hub.save_session(clear=bool(data.get("clear", False))))
 
     async def _send_json(self, writer, data, status="200 OK"):
         body = json.dumps(data)

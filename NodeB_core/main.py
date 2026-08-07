@@ -24,6 +24,7 @@ class ColibryNodeB:
         self.mod_state = KA_STATE_IDLE
         self._manager = None
         self._manager_mod = MOD_NONE
+        self._boot_status_left = 12
         try:
             self.wdt = machine.WDT(timeout=Config.WDT_TIMEOUT_MS)
         except Exception:
@@ -45,6 +46,9 @@ class ColibryNodeB:
             except Exception:
                 pass
             self.link.send_keepalive(free_kb, self._ka_flags(), self.mod_state)
+            if self._boot_status_left > 0:
+                self.link.send_status(ST_BOOT_OK)
+                self._boot_status_left -= 1
             await asyncio.sleep_ms(2000)
 
     async def command_loop(self):

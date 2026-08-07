@@ -84,13 +84,25 @@ class RadioHub:
             pass
 
     async def _rx_loop(self):
+        miss = 0
         while self.link is not None:
             try:
-                self.link.poll()
+                pwr = self._pwr()
+                loops = 8 if (pwr.powered and not self.link.online()) else 2
+                for _ in range(loops):
+                    self.link.poll()
+                    await asyncio.sleep_ms(20)
+                if pwr.powered and not self.link.online():
+                    miss += 1
+                    if miss >= 10:
+                        # soft UART reconnect, Q2 remains unchanged
+                        self.link.close(); self.link = None; self._ensure_link(); self.link.flush_rx(); miss = 0
+                else:
+                    miss = 0
                 self._refresh_ui(False)
             except Exception:
                 pass
-            await asyncio.sleep_ms(250)
+            await asyncio.sleep_ms(120)
 
     def _start_rx(self):
         if self._rx_task is None:
@@ -289,6 +301,8 @@ class RadioHub:
                 "rx_frames": link.rx_frames if link else 0,
                 "crc_fail": link.rx_crc_fail if link else 0,
                 "ka_free_kb": link.ka_free_kb if link else 0,
+                "ka_age_ms": link.ka_age_ms() if link else 0,
+                "status_age_ms": link.status_age_ms() if link else 0,
             },
             "power": {
                 "state": pwr.state,
@@ -318,6 +332,40 @@ class RadioHub:
                 "events": link.event_snapshot() if link else [],
             },
         }
+
+    def clear_log(self):
+        if self.link:
+            self.link.clear_events()
+        return True
+
+    def save_session(self, clear=False):
+        # Explicit user action only; bounded JSONL, max about 16KB.
+        if not self.link:
+            return {"ok": False, "error": "no_link"}
+        try:
+            import uos, time, ujson
+        except Exception:
+            return {"ok": False, "error": "no_fs"}
+        try:
+            uos.mkdir("/sessions")
+        except Exception:
+            pass
+        try:
+            ts = time.localtime()
+            name = "/sessions/%04d%02d%02d_%02d%02d%02d_%s.jsonl" % (ts[0],ts[1],ts[2],ts[3],ts[4],ts[5], self.snapshot()["module"]["name"])
+        except Exception:
+            name = "/sessions/session_radio.jsonl"
+        total = 0
+        with open(name, "w") as f:
+            for e in self.link.event_snapshot():
+                line = ujson.dumps(e) + "\n"
+                total += len(line)
+                if total > 16 * 1024:
+                    break
+                f.write(line)
+        if clear:
+            self.link.clear_events()
+        return {"ok": True, "path": name, "bytes": total}
 
     def close(self):
         self._drop_link()

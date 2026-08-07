@@ -3,7 +3,7 @@ from machine import Pin, SPI
 from config import Config
 
 REG_IOCFG0=0x02; REG_FIFOTHR=0x03; REG_PKTLEN=0x06; REG_PKTCTRL1=0x07; REG_PKTCTRL0=0x08
-REG_FREQ2=0x0D; REG_MDMCFG4=0x10; REG_MDMCFG3=0x11; REG_MDMCFG2=0x12; REG_DEVIATN=0x15
+REG_FREQ2=0x0D; REG_FREQ1=0x0E; REG_FREQ0=0x0F; REG_MDMCFG4=0x10; REG_MDMCFG3=0x11; REG_MDMCFG2=0x12; REG_DEVIATN=0x15
 REG_MCSM0=0x18; REG_FOCCFG=0x19; REG_AGCCTRL2=0x1B; REG_AGCCTRL1=0x1C; REG_AGCCTRL0=0x1D
 REG_FREND0=0x22; REG_FSCAL3=0x23; REG_FSCAL2=0x24; REG_FSCAL1=0x25; REG_FSCAL0=0x26; REG_TEST2=0x2C; REG_TEST1=0x2D; REG_TEST0=0x2E
 PATABLE=0x3E; FIFO=0x3F
@@ -34,10 +34,21 @@ class CC1101:
         return (self.rd(PARTNUM), self.rd(VERSION))
     def set_freq(self, khz):
         self.freq_khz = int(khz); f = int((self.freq_khz * 65536) // 26000)
-        self.wr(REG_FREQ2,(f>>16)&255); self.wr(REG_FREQ1 if False else 0x0E,(f>>8)&255); self.wr(0x0F,f&255)
+        self.wr(REG_FREQ2,(f>>16)&255); self.wr(REG_FREQ1,(f>>8)&255); self.wr(REG_FREQ0,f&255)
     def set_power(self, p): self.cs(0); self.spi.write(bytes((PATABLE, p & 255))); self.cs(1)
-    def set_ook(self): self.wr(REG_MDMCFG2,0x30)
-    def set_2fsk(self): self.wr(REG_MDMCFG2,0x00)
+    def set_modem(self, mod=0, datarate=4800, deviation=5000, bw=203000):
+        # mod: 0=2FSK, 1=GFSK, 3=OOK/ASK. Compact presets avoid float-heavy math.
+        if mod == 3:  # OOK, common remote controls around 4.8kbps
+            self.wr(REG_MDMCFG4,0xCA); self.wr(REG_MDMCFG3,0x83); self.wr(REG_MDMCFG2,0x30); self.wr(REG_DEVIATN,0x00)
+        elif mod == 1:  # GFSK
+            self.wr(REG_MDMCFG4,0xF5); self.wr(REG_MDMCFG3,0x83); self.wr(REG_MDMCFG2,0x10); self.wr(REG_DEVIATN,0x35)
+        else:  # 2-FSK
+            self.wr(REG_MDMCFG4,0xCA); self.wr(REG_MDMCFG3,0x83); self.wr(REG_MDMCFG2,0x00); self.wr(REG_DEVIATN,0x35)
+    def set_ook(self): self.set_modem(3)
+    def set_2fsk(self): self.set_modem(0)
+    def set_gfsk(self): self.set_modem(1)
+    def set_sync(self, sw): self.wr(0x04,(sw>>8)&255); self.wr(0x05,sw&255)
+    def calibrate(self): self.strobe(SIDLE); self.strobe(0x33)
     def idle(self): self.strobe(SIDLE)
     def rx(self): self.strobe(SFRX); self.strobe(SRX)
     def rssi(self):
