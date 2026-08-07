@@ -1,0 +1,30 @@
+{
+  "main": {
+    "name": "Main menu",
+    "items": [
+      {"name": "WiFi", "type": "submenu", "target": "wifi"},
+      {"name": "Power B", "type": "submenu", "target": "power"},
+      {"name": "Reboot", "type": "module", "module": "modules.power.actions", "entry": "reboot"},
+      {"name": "Power off", "type": "module", "module": "modules.power.actions", "entry": "power_off"}
+    ]
+  },
+  "wifi": {
+    "name": "WiFi",
+    "items": [
+      {"name": "On AP", "type": "module", "module": "modules.wifi.manager", "entry": "wifi_on"},
+      {"name": "Off AP", "type": "module", "module": "modules.wifi.manager", "entry": "wifi_off"},
+      {"name": "Back", "type": "back"}
+    ]
+  },
+  "power": {
+    "name": "Power B",
+    "items": [
+      {"name": "Node B ON", "type": "module", "module": "modules.power.actions", "entry": "node_b_on"},
+      {"name": "Node B OFF", "type": "module", "module": "modules.power.actions", "entry": "node_b_off"},
+      {"name": "RF ON", "type": "module", "module": "modules.power.actions", "entry": "rf_on"},
+      {"name": "RF OFF", "type": "module", "module": "modules.power.actions", "entry": "rf_off"},
+      {"name": "Status", "type": "module", "module": "modules.power.actions", "entry": "status"},
+      {"name": "Back", "type": "back"}
+    ]
+  }
+}
