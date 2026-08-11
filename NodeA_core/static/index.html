@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colibry OS</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-top: 32px; }
+        .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 22px 12px; text-align: center; text-decoration: none; color: white; transition: 0.2s; }
+        .card:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 4px 12px rgba(0,255,65,0.15); }
+        .card .icon { font-size: 32px; margin-bottom: 10px; display: block; }
+        .card h3 { margin: 0; font-size: 14px; color: var(--accent); }
+        .section-title { margin: 28px 0 8px; font-size: 13px; opacity: 0.55; letter-spacing: 1px; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header style="text-align:center;">
+        <h1 style="letter-spacing:2px;">COLIBRY <span style="color:var(--accent)">OS</span></h1>
+        <p style="opacity:0.5;margin:4px 0 0;">ESP32-C3 Dual-Node · Core</p>
+    </header>
+
+    <div class="section-title">Workstation</div>
+    <div class="home-grid">
+        <a href="/explorer.html" class="card"><span class="icon">📂</span><h3>Менеджер файлов</h3></a>
+        <a href="/editor.html" class="card"><span class="icon">📝</span><h3>Редактор</h3></a>
+        <a href="/settings.html" class="card"><span class="icon">⚙️</span><h3>Wi-Fi AP</h3></a>
+        <a href="/battery.html" class="card"><span class="icon">🔋</span><h3>Батарея / BMS</h3></a>
+    </div>
+    <div class="section-title">Radio</div>
+    <div class="home-grid">
+        <a href="/radio.html" class="card"><span class="icon">📡</span><h3>Radio / modules</h3></a>
+    </div>
+
+    
+</div>
+</body>
+</html>
