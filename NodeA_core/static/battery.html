@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/style.css">
+    <title>Battery Monitor</title>
+    <style>
+        .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;margin:12px 0}.big{font-size:34px;color:var(--accent);font-weight:bold}.bad{color:var(--danger)}.warn{color:#ffb000}.small{font-size:12px;opacity:.7}.barbox{height:22px;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#111}.bar{height:100%;background:var(--accent);width:0}table{width:100%;border-collapse:collapse}td{padding:6px;border-bottom:1px solid #222}
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="/" style="color:var(--accent)">← Назад</a>
+    <h2>Battery / BMS Monitor</h2>
+    <div class="panel">
+        <div id="pct" class="big">--%</div>
+        <div class="barbox"><div id="bar" class="bar"></div></div>
+        <p id="summary" class="small">Waiting for ADC...</p>
+    </div>
+    <div class="panel">
+        <table>
+            <tr><td>Voltage</td><td id="voltage">-</td></tr>
+            <tr><td>Status</td><td id="status">-</td></tr>
+            <tr><td>Trend</td><td id="trend">-</td></tr>
+            <tr><td>Session min/max</td><td id="minmax">-</td></tr>
+        </table>
+    </div>
+</div>
+<script>
+function by(id){return document.getElementById(id)}
+const ST=["UNKNOWN","CRITICAL","LOW","OK","FULL"];
+function decodeBat(buf){
+  const u=new Uint8Array(buf);
+  if(u.length<10) return {ok:false};
+  const ok=!!u[0], pct=u[1], sc=u[2], ti=u[3];
+  const mv=(u[4]<<8)|u[5], mn=(u[6]<<8)|u[7], mx=(u[8]<<8)|u[9];
+  let trend="?";
+  if(ti===1) trend="UP"; else if(ti===255||ti===-1) trend="DOWN"; else trend="FLAT";
+  return {ok, percent:pct, status:ST[sc]||"UNKNOWN", trend, voltage_mv:mv, min_mv:mn, max_mv:mx, voltage:mv/1000};
+}
+async function poll(){
+  try{
+    const r=await fetch('/api/battery/status');
+    render(decodeBat(await r.arrayBuffer()));
+  }catch(e){by('summary').textContent='API error: '+e}
+  setTimeout(poll,5000);
+}
+function render(d){
+  if(!d.ok){by('summary').textContent='Battery monitor unavailable';return}
+  const pct=Math.max(0,Math.min(100,d.percent||0));
+  by('pct').textContent=pct+'%'; by('bar').style.width=pct+'%';
+  by('pct').className='big '+(d.status==='CRITICAL'?'bad':d.status==='LOW'?'warn':'');
+  by('voltage').textContent=(d.voltage||0).toFixed(2)+' V';
+  by('status').textContent=d.status||'-'; by('trend').textContent=d.trend||'-';
+  by('minmax').textContent=((d.min_mv||0)/1000).toFixed(2)+' / '+((d.max_mv||0)/1000).toFixed(2)+' V';
+  by('summary').textContent=(d.status||'-')+' • '+(d.trend||'-')+' • '+(d.voltage||0).toFixed(2)+' V';
+}
+poll();
+</script>
+</body>
+</html>
