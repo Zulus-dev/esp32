@@ -97,7 +97,7 @@ class RadioHub:
                 if hot:
                     loops, gap, outer = 12, 15, 80
                 elif rf_busy:
-                    # STREAM push from B during listen — poll hard to assemble _cap_buf
+                    # STREAM notify/OP_DUMP — poll hard without full-frame buffer
                     loops, gap, outer = 10, 8, 30
                 else:
                     loops, gap, outer = 2, 40, 200

@@ -271,7 +271,7 @@ class Manager:
         # Flipper: after signal drops below threshold, keep recording briefly then stop.
         # We end on GDO0 silence gap (gap_end_ms), not a second software filter.
         _GAP_END_MS = 120
-        _MIN_BITS = 48
+        _MIN_BITS = 16
         while self.task:
             try:
                 if self.caps.busy:
@@ -339,7 +339,7 @@ class Manager:
             )
             if p > peak:
                 peak = p
-            if nbits >= 48:
+            if nbits >= 16:
                 self._commit_capture((nbits + 7) // 8, peak, nbits)
                 self.link.send_status(ST_DONE, nbits if nbits < 65535 else 65535)
                 self._feed_wdt()

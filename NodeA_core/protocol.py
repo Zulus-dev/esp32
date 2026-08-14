@@ -110,7 +110,7 @@ ERR_UNSUPPORTED = const(9)
 # Phone: on seq change → GET /capture → OP_DUMP → DATA chunks (actual_len only).
 # After successful OP_DUMP stream NodeB FREEs the slot.
 # NodeA is a pure translator: short STREAM chunks, no full-frame slab.
-CAPTURE_SLOT_SIZE = const(8192)   # NodeB ping-pong slot
+CAPTURE_SLOT_SIZE = const(4096)   # NodeB ping-pong slot
 CAPTURE_SLOTS = const(2)          # ping-pong on NodeB only
 STREAM_DATA_MAX = const(55)       # 1 seq + ≤55 data inside SLIP payload 64
 PREVIEW_MAX = const(16)           # TLV_PKT UI spike only (not RAW path)

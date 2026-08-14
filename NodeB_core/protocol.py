@@ -106,7 +106,7 @@ ERR_UNSUPPORTED = const(9)
 
 # --- capture contract (v2.1, shared; full RAW lives on NodeB only) ---
 # Listen: RECORD → notify META+END (no DATA) → phone OP_DUMP → stream actual_len → FREE.
-CAPTURE_SLOT_SIZE = const(8192)   # one full RAW frame per slot
+CAPTURE_SLOT_SIZE = const(4096)   # one full RAW frame per slot
 CAPTURE_SLOTS = const(2)          # ping-pong on NodeB
 STREAM_DATA_MAX = const(55)       # 1 seq + ≤55 data inside SLIP payload 64
 PREVIEW_MAX = const(16)           # TLV_PKT UI spike only (not RAW path)

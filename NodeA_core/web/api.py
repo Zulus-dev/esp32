@@ -453,6 +453,10 @@ class FileAPI:
             got = 0
             want_seq = 0
             bad_seq = False
+            out = _web_file_buf()
+            out_pos = 0
+            out_cap = len(out) if out is not None else 0
+
             end_ms = time.ticks_ms() + 6000
             while got < n and time.ticks_diff(end_ms, time.ticks_ms()) > 0:
                 try:
@@ -474,13 +478,34 @@ class FileAPI:
                     room = n - got
                     if take > room:
                         take = room
-                    if take > 0:
+                    if take <= 0:
+                        continue
+                    if out_cap <= 0 or take > out_cap:
+                        if out_pos > 0:
+                            writer.write(memoryview(out)[:out_pos])
+                            await writer.drain()
+                            out_pos = 0
                         writer.write(data[:take])
                         await writer.drain()
-                        got += take
+                    else:
+                        if out_pos + take > out_cap:
+                            writer.write(memoryview(out)[:out_pos])
+                            await writer.drain()
+                            out_pos = 0
+                        out[out_pos:out_pos + take] = data[:take]
+                        out_pos += take
+                        if out_pos >= 512:
+                            writer.write(memoryview(out)[:out_pos])
+                            await writer.drain()
+                            out_pos = 0
+                    got += take
                 if link._pipe_end and link._pipe_count == 0:
                     break
                 await asyncio.sleep_ms(1)
+            if out_pos > 0:
+                writer.write(memoryview(out)[:out_pos])
+                await writer.drain()
+                out_pos = 0
 
             overflow = bool(getattr(link, "_pipe_overflow", False))
             link.pipe_end()
