@@ -1,15 +1,15 @@
 # lib/mempool.py — Node B RF slabs + dual capture slots (ping-pong).
 #
 # Capture contract:
-#   CAPTURE_SLOT_SIZE = 8192, CAPTURE_SLOTS = 2 (only on NodeB).
+#   CAPTURE_SLOT_SIZE = 4096, CAPTURE_SLOTS = 2 (only on NodeB).
 #   Alloc once on RF profile load; drop on RF off. No per-frame bytearray().
-#   Fallback 4096 → 2048 per slot if MemoryError.
+#   Fallback 2048 → 1024 per slot if MemoryError.
 #
 import gc
 
 _POOL = {}
 
-CAPTURE_SLOT_SIZE = 8192
+CAPTURE_SLOT_SIZE = 4096
 CAPTURE_SLOTS = 2
 
 

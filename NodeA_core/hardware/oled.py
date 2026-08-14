@@ -57,13 +57,14 @@ class OLED:
         if battery is not None:
             self.battery_percent = battery.get("percent")
             self.battery_status = battery.get("status", "UNKNOWN")
+        # Do not include free RAM in the redraw key: during UART/HTTP capture it
+        # fluctuates constantly and would hammer I2C/OLED in the hot path.
         state = (
             self.status_server,
             self.status_node_b,
             self.status_rf,
             self.battery_percent,
             self.battery_status,
-            gc.mem_free() // 1024,
         )
         if force or state != self._last_status:
             self.draw_status()

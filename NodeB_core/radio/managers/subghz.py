@@ -2,7 +2,7 @@
 # RAM: dual capture slots (ping-pong) via lib.capture_slots; stop → full unload.
 #
 # Capture rules:
-# - FREE → RECORDING → FULL → SENDING → HELD (frame stays on NodeB for OP_DUMP).
+# - FREE → RECORDING → FULL → SENDING → FREE (slot stays FULL until OP_DUMP).
 # - Full RAW only on NodeB slots. NodeA pipes STREAM chunks to phone — no 8 KB slab.
 # - TLV_PKT ≤48 is UI preview only.
 # - Modes mutually exclusive: IDLE | SCAN | LISTEN | CAPTURE_ONCE.
@@ -257,7 +257,7 @@ class Manager:
           - gate = user RSSI threshold only
           - on RSSI >= gate → record GDO0 until gap (silence)
           - keep if nbits >= min (no edges/duty invent-filters)
-          - then push actual_len to NodeA, FREE slot
+          - notify META+END only; phone OP_DUMP streams actual_len then FREE
         Decode happens on phone after full frame — not during RX.
         """
         pid = self.preset if self.preset in (0, 1) else 0
@@ -271,7 +271,7 @@ class Manager:
         # Flipper: after signal drops below threshold, keep recording briefly then stop.
         # We end on GDO0 silence gap (gap_end_ms), not a second software filter.
         _GAP_END_MS = 120
-        _MIN_BITS = 48
+        _MIN_BITS = 16
         while self.task:
             try:
                 if self.caps.busy:
@@ -339,7 +339,7 @@ class Manager:
             )
             if p > peak:
                 peak = p
-            if nbits >= 48:
+            if nbits >= 16:
                 self._commit_capture((nbits + 7) // 8, peak, nbits)
                 self.link.send_status(ST_DONE, nbits if nbits < 65535 else 65535)
                 self._feed_wdt()
@@ -418,7 +418,7 @@ class Manager:
         if op == OP_DUMP:
             # Phone pull: stream only actual_len, then FREE slot on NodeB
             try:
-                self.caps.restream_held(self.link)
+                self.caps.dump_pending(self.link)
             except Exception:
                 pass
             self.link.send_status(ST_DONE, MOD_SUBGHZ)
