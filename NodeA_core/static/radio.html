@@ -566,7 +566,7 @@ function pushHist(raw) {
   drawSpec();
 }
 
-/** Pull assembled frame once per capture_seq (NodeB push → NodeA asm → phone). */
+/** Pull full frame once per capture_seq (NodeB holds → NodeA pipes → phone). */
 async function pullFullCapture(seq) {
   if (!activeRx || typeof radioFullCapture !== 'function') return;
   if (seq != null && seq === lastCapSeq) return;
