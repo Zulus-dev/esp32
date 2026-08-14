@@ -25,7 +25,7 @@ OP_STOP = const(0x04)
 OP_ONCE = const(0x05)
 OP_TX_RAW = const(0x06)
 OP_REPLAY = const(0x07)
-OP_DUMP = const(0x08)  # re-stream last held capture (B keeps frame; A pipes chunks)
+OP_DUMP = const(0x08)  # stream pending NodeB capture; A pipes chunks
 
 SUB_MODE_SCAN = const(0x01)
 SUB_MODE_SNIFF = const(0x02)
@@ -48,7 +48,7 @@ BLE_MODE_ADV = const(0x03)
 
 # --- TLV types / binary layouts ---
 TLV_RSSI = const(0x10)         # freq_u32_be + rssi_i8
-TLV_PKT = const(0x11)          # preview only: mod_u8 + freq_u32be + rssi_i8 + len_u8 + raw<=48
+TLV_PKT = const(0x11)          # preview only: mod_u8 + freq_u32be + rssi_i8 + len_u8 (no RAW)
 TLV_NRF_EVENT = const(0x12)    # event_u8 + pipe_u8 + channel_u8 + rssi_i8 + len_u8 + raw<=32
 TLV_WIFI_FRAME = const(0x13)   # frame_type_u8 + channel_u8 + rssi_i8 + len_u8 + raw<=48
 TLV_BLE_ADV = const(0x14)      # addr_type_u8 + addr6 + adv_type_u8 + rssi_i8 + len_u8 + data<=31
@@ -108,7 +108,7 @@ ERR_UNSUPPORTED = const(9)
 # Full RAW lives on NodeB only (CAPTURE_SLOTS × CAPTURE_SLOT_SIZE).
 # Listen: RECORD → notify (STREAM_META+END, no DATA) → capture_seq++ on A.
 # Phone: on seq change → GET /capture → OP_DUMP → DATA chunks (actual_len only).
-# After successful OP_DUMP stream NodeB FREEs the slot (no sticky HELD).
+# After successful OP_DUMP stream NodeB FREEs the slot.
 # NodeA is a pure translator: short STREAM chunks, no full-frame slab.
 CAPTURE_SLOT_SIZE = const(8192)   # NodeB ping-pong slot
 CAPTURE_SLOTS = const(2)          # ping-pong on NodeB only

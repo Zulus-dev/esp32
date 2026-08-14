@@ -249,7 +249,7 @@ async function radioStatus() {
 }
 
 /**
- * Full capture: NodeB pushed STREAM; NodeA assembled; GET returns complete frame.
+ * Full capture: NodeB holds RAW; GET asks NodeA to pipe OP_DUMP chunks to this response.
  * Returns { freq_khz, rssi, nbits, len, hex, raw } or null.
  */
 async function radioFullCapture() {
