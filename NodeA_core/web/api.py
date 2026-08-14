@@ -44,6 +44,8 @@ def _web_file_buf():
 class FileAPI:
     def __init__(self, core=None):
         self.core = core
+        self._cap_cmd = bytearray(1)
+        self._cap_hdr = bytearray(9)
 
     def set_core(self, core):
         self.core = core
@@ -402,7 +404,7 @@ class FileAPI:
 
             link.pipe_begin()
             try:
-                cmd = bytearray(1)
+                cmd = self._cap_cmd
                 cmd[0] = OP_DUMP
                 link.send_cmd(hub.active_mod or MOD_SUBGHZ, memoryview(cmd)[:1])
             except Exception:
@@ -429,7 +431,7 @@ class FileAPI:
             n = link._pipe_total
             if nbits > 65535:
                 nbits = 65535
-            hdr = bytearray(9)
+            hdr = self._cap_hdr
             hdr[0] = (freq >> 24) & 255
             hdr[1] = (freq >> 16) & 255
             hdr[2] = (freq >> 8) & 255
@@ -449,6 +451,8 @@ class FileAPI:
             await writer.drain()
 
             got = 0
+            want_seq = 0
+            bad_seq = False
             end_ms = time.ticks_ms() + 6000
             while got < n and time.ticks_diff(end_ms, time.ticks_ms()) > 0:
                 try:
@@ -461,6 +465,10 @@ class FileAPI:
                         break
                     if len(mv) <= 1:
                         continue
+                    seq = mv[0] & 255
+                    if seq != want_seq:
+                        bad_seq = True
+                    want_seq = (seq + 1) & 255
                     data = mv[1:]
                     take = len(data)
                     room = n - got
@@ -476,7 +484,7 @@ class FileAPI:
 
             overflow = bool(getattr(link, "_pipe_overflow", False))
             link.pipe_end()
-            if got == n and not overflow:
+            if got == n and not overflow and not bad_seq:
                 link.capture_ready = False
         except Exception:
             try:

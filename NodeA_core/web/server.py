@@ -74,16 +74,26 @@ class AsyncServer:
 
     async def handle_client(self, reader, writer):
         waited = 0
-        while self._busy:
-            await asyncio.sleep_ms(15)
-            waited += 15
-            if waited > 3000:
-                try:
-                    writer.close()
-                    await writer.wait_closed()
-                except Exception:
-                    pass
-                return
+        while self._busy and waited < 250:
+            await asyncio.sleep_ms(25)
+            waited += 25
+        if self._busy:
+            # Single-flight server: do not queue status polls behind a long /capture.
+            # Queued sockets were the main RAM/latency spike during OP_DUMP.
+            try:
+                writer.write(
+                    b"HTTP/1.1 503 Service Unavailable\r\n"
+                    b"Connection: close\r\nRetry-After: 1\r\n\r\n"
+                )
+                await writer.drain()
+            except Exception:
+                pass
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+            return
         try:
             from lib import mempool
             if not mempool.guard_or_gc():

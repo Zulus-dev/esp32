@@ -175,10 +175,7 @@ class CaptureSlots:
         link.send_tlv(TLV_STREAM_END, memoryview(t)[:5])
 
     def _preview_short(self, link, mod, freq, rssi, n, buf):
-        """UI spike only: meta + ≤16 B head. Not a second RAW path."""
-        prev = n if n <= _PREVIEW_NOTIFY else _PREVIEW_NOTIFY
-        if prev < 0:
-            prev = 0
+        """UI spike only: metadata; never copy RAW preview bytes."""
         p = self._tlv
         p[0] = mod & 0xFF
         p[1] = (freq >> 24) & 255
@@ -186,10 +183,8 @@ class CaptureSlots:
         p[3] = (freq >> 8) & 255
         p[4] = freq & 255
         p[5] = rssi & 255
-        p[6] = prev & 255
-        if prev and buf is not None:
-            p[7:7 + prev] = memoryview(buf)[:prev]
-        link.send_tlv(TLV_PKT, memoryview(p)[:7 + prev])
+        p[6] = 0
+        link.send_tlv(TLV_PKT, memoryview(p)[:7])
 
     def notify_ready(self, link):
         """
@@ -341,8 +336,8 @@ class CaptureSlots:
         off = 0
         seq = 0
         # Adaptive pace: larger frames need more headroom for A's HTTP drain
-        gap_every = 4
-        gap_ms = 2 if n > 2048 else 1
+        gap_every = 2
+        gap_ms = 4 if n > 2048 else 2
         while off < n:
             take = n - off
             if take > STREAM_DATA_MAX:

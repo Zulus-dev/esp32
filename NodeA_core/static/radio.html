@@ -152,7 +152,9 @@ const tlSpikes = [];
 let activeRx = false;    // true only while Listen or Spectrum running
 let ignoreHex = new Set(); // hex already in hist / cleared — do not re-add
 let lastCaptureKey = "";   // avoid re-pushing same full capture
-let lastCapSeq = 0;        // only OP_DUMP when status.capture_seq changes
+let lastCapSeq = 0;        // last successful full capture seq
+let capPulling = false;    // single OP_DUMP fetch in flight
+let capPendingSeq = 0;     // newest seq seen while a pull is active
 
 function rssiColor(r) {
   const t = Math.max(0, Math.min(1, (r + 110) / 90));
@@ -570,6 +572,9 @@ function pushHist(raw) {
 async function pullFullCapture(seq) {
   if (!activeRx || typeof radioFullCapture !== 'function') return;
   if (seq != null && seq === lastCapSeq) return;
+  if (capPulling) { if (seq != null) capPendingSeq = seq; return; }
+  capPulling = true;
+  capPendingSeq = seq || 0;
   try {
     const full = await radioFullCapture();
     if (full && full.hex && full.len > 0) {
@@ -582,6 +587,9 @@ async function pullFullCapture(seq) {
     }
   } catch (e) {
     log('CAP err ' + e);
+  } finally {
+    capPulling = false;
+    capPendingSeq = 0;
   }
 }
 
@@ -726,7 +734,7 @@ function apply(s) {
     }
     // Full RAW only when capture_seq advances (avoids OP_DUMP every poll = lag)
     const cseq = T.capture_seq || 0;
-    if (cseq && cseq !== lastCapSeq) {
+    if (cseq && cseq !== lastCapSeq && cseq !== capPendingSeq) {
       pullFullCapture(cseq);
     }
   }
@@ -880,7 +888,7 @@ function restartTimer() {
   if ($('live').checked) timer = setInterval(tick, pollInterval());
 }
 function tick() {
-  if (!$('live').checked) return;
+  if (!$('live').checked || capPulling) return;
   radioStatus().then(apply).catch(() => {});
 }
 $('live').onchange = () => restartTimer();
