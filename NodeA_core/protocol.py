@@ -108,7 +108,7 @@ ERR_UNSUPPORTED = const(9)
 # Full RAW lives on NodeB only (CAPTURE_SLOTS × CAPTURE_SLOT_SIZE).
 # Listen: RECORD → notify (STREAM_META+END, no DATA) → capture_seq++ on A.
 # Phone: on seq change → GET /capture → OP_DUMP → DATA chunks (actual_len only).
-# After successful OP_DUMP stream NodeB FREEs the slot (no sticky HELD).
+# After successful OP_DUMP stream NodeB FREEs the slot.
 # NodeA is a pure translator: short STREAM chunks, no full-frame slab.
 CAPTURE_SLOT_SIZE = const(8192)   # NodeB ping-pong slot
 CAPTURE_SLOTS = const(2)          # ping-pong on NodeB only

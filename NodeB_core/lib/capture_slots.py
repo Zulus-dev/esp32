@@ -19,7 +19,6 @@ ST_FREE = 0
 ST_RECORDING = 1
 ST_FULL = 2
 ST_SENDING = 3
-ST_HELD = 4  # legacy alias; after dump we go FREE
 
 # Short preview for UI spike only — not full RAW path
 _PREVIEW_NOTIFY = 16
@@ -78,7 +77,7 @@ class CaptureSlots:
         """
         Return (slot_index, buf) or (-1, None).
         Ping-pong: prefer FREE slot; never start while STREAM busy.
-        Evict only when BOTH slots are FULL/HELD — drop oldest (not last_slot first).
+        Evict only when BOTH slots are FULL — drop oldest (not last_slot first).
         """
         if self._rec >= 0 or self.busy:
             return -1, None
@@ -90,14 +89,14 @@ class CaptureSlots:
         # Both occupied — evict the one that is NOT last_slot (keep newest pending)
         victim = -1
         for i in (0, 1):
-            if self.state[i] in (ST_FULL, ST_HELD) and self.slots[i] is not None:
+            if self.state[i] == ST_FULL and self.slots[i] is not None:
                 if i != self.last_slot:
                     victim = i
                     break
         if victim < 0:
             # only last_slot left — must drop it to keep listen alive
             victim = self.last_slot if self.last_slot >= 0 else 0
-        if 0 <= victim < 2 and self.state[victim] in (ST_FULL, ST_HELD):
+        if 0 <= victim < 2 and self.state[victim] == ST_FULL:
             try:
                 while victim in self._fifo:
                     self._fifo.remove(victim)
@@ -232,7 +231,7 @@ class CaptureSlots:
                 return False
         else:
             i = self._fifo.pop(0)
-        if self.state[i] not in (ST_FULL, ST_HELD) or self.slots[i] is None or self.meta[i] is None:
+        if self.state[i] != ST_FULL or self.slots[i] is None or self.meta[i] is None:
             self.state[i] = ST_FREE
             return False
         self.state[i] = ST_SENDING
@@ -253,16 +252,16 @@ class CaptureSlots:
             self.last_len = n
             self.last_bits = nb
         else:
-            self.state[i] = ST_HELD
+            self.state[i] = ST_FULL
             self.last_slot = i
         self._send = -1
         self.busy = False
         self._feed_wdt()
         return ok
 
-    def restream_held(self, link):
+    def dump_pending(self, link):
         """
-        OP_DUMP: stream last FULL/HELD (or any FULL slot), then FREE.
+        OP_DUMP: stream last FULL (or any FULL slot), then FREE.
         Phone gets complete frame; NodeB buffer cleared.
         """
         if self.busy:
@@ -271,12 +270,12 @@ class CaptureSlots:
         if i < 0 or self.slots[i] is None or self.meta[i] is None:
             # fallback: any FULL
             for j in (0, 1):
-                if self.state[j] in (ST_FULL, ST_HELD) and self.meta[j] is not None:
+                if self.state[j] == ST_FULL and self.meta[j] is not None:
                     i = j
                     break
             else:
                 return False
-        if self.state[i] not in (ST_HELD, ST_FULL, ST_SENDING):
+        if self.state[i] not in (ST_FULL, ST_SENDING):
             return False
         # Drop from fifo if present
         try:
